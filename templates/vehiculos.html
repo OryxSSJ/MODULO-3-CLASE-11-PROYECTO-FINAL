@@ -1,0 +1,155 @@
+{% extends 'layout.html' %}
+{% block title %}Vehículos — ParkSystem{% endblock %}
+{% block page_title %}Vehículos <span>Registro de vehículos</span>{% endblock %}
+
+{% block page_content %}
+<div class="stats-grid">
+  <div class="stat-card teal">
+    <div class="stat-card-header"><div class="stat-card-icon">🚘</div></div>
+    <div class="stat-card-value" data-count="{{ vehiculos|length }}">0</div>
+    <div class="stat-card-label">Vehículos registrados</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab-item active" data-tab="tab-table">📋 Tabla</button>
+  <button class="tab-item" data-tab="tab-cards">🃏 Tarjetas</button>
+</div>
+
+<div class="tab-content active" id="tab-table">
+  <div class="content-card">
+    <div class="content-card-header">
+      <h2 class="content-card-title"><span class="card-icon">🚘</span> Lista de Vehículos</h2>
+      <div class="content-card-actions">
+        <input type="text" placeholder="Buscar placa..." class="form-input-no-icon" style="width:200px;padding:0.5rem 1rem;font-size:0.85rem;" data-search-table="vehiculos-table">
+        <button class="btn btn-primary btn-sm" data-modal="modal-crear-vehiculo">+ Nuevo Vehículo</button>
+      </div>
+    </div>
+    <div class="content-card-body" style="padding:0;">
+      <div class="table-container">
+        <table class="data-table" id="vehiculos-table">
+          <thead><tr><th>ID</th><th>Placa</th><th>Marca</th><th>Modelo</th><th>Color</th><th>Cliente</th><th>Acciones</th></tr></thead>
+          <tbody>
+            {% for v in vehiculos %}
+            {% set cli = get_cliente(v.id_cliente) %}
+            <tr>
+              <td class="table-cell-mono">{{ v.id_vehiculo }}</td>
+              <td><span class="table-cell-mono" style="font-size:1rem;background:rgba(0,212,170,0.1);padding:4px 10px;border-radius:6px;">{{ v.placa }}</span></td>
+              <td class="table-cell-primary">{{ v.marca }}</td>
+              <td>{{ v.modelo }}</td>
+              <td>
+                <div class="d-flex align-center gap-1">
+                  <span style="width:12px;height:12px;border-radius:50%;display:inline-block;border:1px solid var(--border-color);
+                    {% if v.color=='Blanco' %}background:#fff;{% elif v.color=='Negro' %}background:#222;{% elif v.color=='Rojo' %}background:#ef4444;{% elif v.color=='Azul' %}background:#3b82f6;{% elif v.color=='Gris' %}background:#9ca3af;{% else %}background:#64748b;{% endif %}
+                  "></span>
+                  {{ v.color }}
+                </div>
+              </td>
+              <td>{{ cli.nombre if cli else 'Sin asignar' }}</td>
+              <td>
+                <div class="d-flex gap-1">
+                  <button class="btn btn-ghost btn-sm" title="Editar"
+                    onclick="abrirEditarVehiculo({{ v.id_vehiculo }},'{{ v.placa }}','{{ v.marca }}','{{ v.modelo }}','{{ v.color }}',{{ v.id_cliente }})">✏️</button>
+                  <button class="btn btn-danger btn-sm" title="Eliminar"
+                    onclick="eliminarVehiculo({{ v.id_vehiculo }},'{{ v.placa }}')">🗑️</button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-cards">
+  <div class="vehicle-grid">
+    {% for v in vehiculos %}
+    {% set cli = get_cliente(v.id_cliente) %}
+    <div class="vehicle-card">
+      <div class="vehicle-card-plate">🚗 {{ v.placa }}</div>
+      <div class="vehicle-card-details">
+        <div class="vehicle-card-detail"><span class="detail-label">Marca:</span><span class="table-cell-primary">{{ v.marca }}</span></div>
+        <div class="vehicle-card-detail"><span class="detail-label">Modelo:</span><span>{{ v.modelo }}</span></div>
+        <div class="vehicle-card-detail"><span class="detail-label">Color:</span><span>{{ v.color }}</span></div>
+        <div class="vehicle-card-detail"><span class="detail-label">Cliente:</span><span>{{ cli.nombre if cli else 'Sin asignar' }}</span></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- MODAL: Crear Vehículo -->
+<div class="modal-overlay" id="modal-crear-vehiculo">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Nuevo Vehículo</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <form id="form-crear-vehiculo">
+        <div class="form-group">
+          <label class="form-label">Placa</label>
+          <input type="text" name="placa" class="form-input-no-icon" placeholder="CHH-123-A" required maxlength="20" style="text-transform:uppercase;font-family:var(--font-mono);font-size:1.1rem;letter-spacing:0.1em;">
+        </div>
+        <div class="grid-form-row">
+          <div class="form-group"><label class="form-label">Marca</label><input type="text" name="marca" class="form-input-no-icon" placeholder="Toyota" required></div>
+          <div class="form-group"><label class="form-label">Modelo</label><input type="text" name="modelo" class="form-input-no-icon" placeholder="Corolla 2024" required></div>
+        </div>
+        <div class="grid-form-row">
+          <div class="form-group">
+            <label class="form-label">Color</label>
+            <select name="color" class="form-select" required>
+              <option value="Blanco">⬜ Blanco</option><option value="Negro">⬛ Negro</option><option value="Gris">🔲 Gris</option>
+              <option value="Rojo">🟥 Rojo</option><option value="Azul">🟦 Azul</option><option value="Otro">🔳 Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cliente</label>
+            <select name="id_cliente" class="form-select" required>
+              <option value="">Seleccionar...</option>
+              {% for c in clientes %}<option value="{{ c.id_cliente }}">{{ c.nombre }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="crearVehiculo()">Guardar Vehículo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Vehículo -->
+<div class="modal-overlay" id="modal-editar-vehiculo">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Editar Vehículo</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-vehiculo-id">
+      <div class="form-group"><label class="form-label">Placa</label><input type="text" id="edit-vehiculo-placa" class="form-input-no-icon" style="text-transform:uppercase;font-family:var(--font-mono);"></div>
+      <div class="grid-form-row">
+        <div class="form-group"><label class="form-label">Marca</label><input type="text" id="edit-vehiculo-marca" class="form-input-no-icon"></div>
+        <div class="form-group"><label class="form-label">Modelo</label><input type="text" id="edit-vehiculo-modelo" class="form-input-no-icon"></div>
+      </div>
+      <div class="grid-form-row">
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <select id="edit-vehiculo-color" class="form-select">
+            <option value="Blanco">Blanco</option><option value="Negro">Negro</option><option value="Gris">Gris</option>
+            <option value="Rojo">Rojo</option><option value="Azul">Azul</option><option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente</label>
+          <select id="edit-vehiculo-cliente" class="form-select">
+            {% for c in clientes %}<option value="{{ c.id_cliente }}">{{ c.nombre }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditarVehiculo()">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

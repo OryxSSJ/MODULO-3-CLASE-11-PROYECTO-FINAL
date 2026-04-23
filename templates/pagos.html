@@ -1,0 +1,87 @@
+{% extends 'layout.html' %}
+{% block title %}Pagos — ParkSystem{% endblock %}
+{% block page_title %}Pagos <span>Historial de pagos</span>{% endblock %}
+
+{% block page_content %}
+<div class="stats-grid">
+  <div class="stat-card teal">
+    <div class="stat-card-header"><div class="stat-card-icon">💰</div></div>
+    <div class="stat-card-value" data-count="{{ pagos|length }}">0</div>
+    <div class="stat-card-label">Total pagos</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-card-header"><div class="stat-card-icon">🅿️</div></div>
+    <div class="stat-card-value">$<span data-count="{{ pagos|selectattr('id_estancia')|list|sum(attribute='monto')|int }}">0</span></div>
+    <div class="stat-card-label">Ingresos por estancia</div>
+  </div>
+  <div class="stat-card pink">
+    <div class="stat-card-header"><div class="stat-card-icon">📋</div></div>
+    <div class="stat-card-value">$<span data-count="{{ pagos|selectattr('id_pension')|list|sum(attribute='monto')|int }}">0</span></div>
+    <div class="stat-card-label">Ingresos por pensión</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-card-header"><div class="stat-card-icon">💎</div></div>
+    <div class="stat-card-value">$<span data-count="{{ pagos|sum(attribute='monto')|int }}">0</span></div>
+    <div class="stat-card-label">Total general</div>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="content-card-header">
+    <h2 class="content-card-title"><span class="card-icon">💰</span> Historial de Pagos</h2>
+    <input type="text" placeholder="Buscar pago..." class="form-input-no-icon" style="width:200px;padding:0.5rem 1rem;font-size:0.85rem;" data-search-table="pagos-table">
+  </div>
+  <div class="content-card-body" style="padding:0;">
+    <div class="table-container">
+      <table class="data-table" id="pagos-table">
+        <thead>
+          <tr><th>ID Pago</th><th>Tipo</th><th>Vehículo</th><th>Monto</th><th>Fecha</th><th>Método</th><th>Referencia</th><th>Estado</th></tr>
+        </thead>
+        <tbody>
+          {% for p in pagos %}
+          <tr>
+            <td class="table-cell-mono">{{ p.id_pago }}</td>
+            <td>
+              {% if p.id_estancia %}
+                <span class="badge badge-info">🅿️ Estancia</span>
+              {% else %}
+                <span class="badge badge-purple">📋 Pensión</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if p.id_estancia %}
+                {% set est = None %}
+                {% for e in estancias if e.id_estancia == p.id_estancia %}{% set est = e %}{% endfor %}
+                {% if est %}
+                  {% set v = get_vehiculo(est.id_vehiculo) %}
+                  <span class="table-cell-mono">{{ v.placa if v else 'N/A' }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">Pensión #{{ p.id_pension }}</span>
+              {% endif %}
+            </td>
+            <td class="table-cell-primary" style="font-weight:700;font-size:1.05rem;">${{ "%.2f"|format(p.monto) }}</td>
+            <td>{{ p.fecha_pago }}</td>
+            <td>
+              {% if p.metodo_pago == 'EFECTIVO' %}<span class="badge badge-success">💵 Efectivo</span>
+              {% elif p.metodo_pago == 'TARJETA' %}<span class="badge badge-info">💳 Tarjeta</span>
+              {% elif p.metodo_pago == 'TRANSFERENCIA' %}<span class="badge badge-purple">🏦 Transferencia</span>
+              {% else %}<span class="badge badge-warning">📝 Otro</span>{% endif %}
+            </td>
+            <td class="table-cell-mono">{{ p.referencia or '—' }}</td>
+            <td><span class="badge badge-success">✅ Pagado</span></td>
+          </tr>
+          {% endfor %}
+          {% if not pagos %}
+          <tr><td colspan="8">
+            <div class="empty-state"><div class="empty-state-icon">💰</div><h3>Sin pagos</h3><p>Los pagos se generan al registrar salidas</p></div>
+          </td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

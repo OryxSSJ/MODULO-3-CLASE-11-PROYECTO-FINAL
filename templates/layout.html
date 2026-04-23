@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="app-layout">
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-icon">🅿️</div>
+        <div class="sidebar-brand-text">
+          <h2>ParkSystem</h2>
+          <p>Estacionamiento Público</p>
+        </div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="sidebar-nav-section">
+        <div class="sidebar-nav-title">Principal</div>
+        <a href="{{ url_for('dashboard') }}" class="sidebar-nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+          <span class="nav-icon">📊</span> Dashboard
+        </a>
+        <a href="{{ url_for('estancias') }}" class="sidebar-nav-item {% if request.endpoint == 'estancias' %}active{% endif %}">
+          <span class="nav-icon">🚗</span> Estancias
+          <span class="nav-badge">{{ vehiculos_activos_count }}</span>
+        </a>
+        <a href="{{ url_for('pagos') }}" class="sidebar-nav-item {% if request.endpoint == 'pagos' %}active{% endif %}">
+          <span class="nav-icon">💰</span> Pagos
+        </a>
+      </div>
+
+      <div class="sidebar-nav-section">
+        <div class="sidebar-nav-title">Gestión</div>
+        <a href="{{ url_for('clientes') }}" class="sidebar-nav-item {% if request.endpoint == 'clientes' %}active{% endif %}">
+          <span class="nav-icon">👥</span> Clientes
+        </a>
+        <a href="{{ url_for('vehiculos') }}" class="sidebar-nav-item {% if request.endpoint == 'vehiculos' %}active{% endif %}">
+          <span class="nav-icon">🚘</span> Vehículos
+        </a>
+        <a href="{{ url_for('tarifas') }}" class="sidebar-nav-item {% if request.endpoint == 'tarifas' %}active{% endif %}">
+          <span class="nav-icon">💲</span> Tarifas
+        </a>
+        <a href="{{ url_for('pensiones') }}" class="sidebar-nav-item {% if request.endpoint == 'pensiones' %}active{% endif %}">
+          <span class="nav-icon">📋</span> Pensiones
+        </a>
+      </div>
+
+      {% if session.user.perfil == 'admin' %}
+      <div class="sidebar-nav-section">
+        <div class="sidebar-nav-title">Administración</div>
+        <a href="{{ url_for('usuarios') }}" class="sidebar-nav-item {% if request.endpoint == 'usuarios' %}active{% endif %}">
+          <span class="nav-icon">🔑</span> Usuarios
+        </a>
+        <a href="{{ url_for('reportes') }}" class="sidebar-nav-item {% if request.endpoint == 'reportes' %}active{% endif %}">
+          <span class="nav-icon">📈</span> Reportes
+        </a>
+      </div>
+      {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-user-avatar">{{ session.user.nombre[0] | upper }}</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name">{{ session.user.nombre }}</div>
+          <div class="sidebar-user-role">{{ session.user.perfil }}</div>
+        </div>
+        <a href="{{ url_for('logout') }}" class="sidebar-logout-btn" title="Cerrar sesión">🚪</a>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <header class="main-header">
+      <div class="main-header-left">
+        <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+        <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+      </div>
+      <div class="main-header-right">
+        <div class="header-search">
+          <input type="text" placeholder="Buscar placa, cliente..." id="global-search">
+          <span class="search-icon">🔍</span>
+        </div>
+      </div>
+    </header>
+    <main class="main-body">
+      {% block page_content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}

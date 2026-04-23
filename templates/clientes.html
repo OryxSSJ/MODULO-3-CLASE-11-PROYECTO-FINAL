@@ -1,0 +1,174 @@
+{% extends 'layout.html' %}
+
+{% block title %}Clientes — ParkSystem{% endblock %}
+{% block page_title %}Clientes <span>Gestión de clientes</span>{% endblock %}
+
+{% block page_content %}
+<div class="stats-grid">
+  <div class="stat-card teal">
+    <div class="stat-card-header"><div class="stat-card-icon">👥</div></div>
+    <div class="stat-card-value" data-count="{{ clientes|length }}">0</div>
+    <div class="stat-card-label">Total clientes</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-card-header"><div class="stat-card-icon">⭐</div></div>
+    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente','equalto','REGISTRADO')|list|length }}">0</div>
+    <div class="stat-card-label">Registrados</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-card-header"><div class="stat-card-icon">🚶</div></div>
+    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente','equalto','OCASIONAL')|list|length }}">0</div>
+    <div class="stat-card-label">Ocasionales</div>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="content-card-header">
+    <h2 class="content-card-title"><span class="card-icon">👥</span> Directorio de Clientes</h2>
+    <div class="content-card-actions">
+      <input type="text" placeholder="Buscar cliente..." class="form-input-no-icon" style="width:220px;padding:0.5rem 1rem;font-size:0.85rem;" data-search-table="clientes-table">
+      <button class="btn btn-primary btn-sm" data-modal="modal-crear-cliente">+ Nuevo Cliente</button>
+    </div>
+  </div>
+  <div class="content-card-body" style="padding:0;">
+    <div class="table-container">
+      <table class="data-table" id="clientes-table">
+        <thead>
+          <tr><th>ID</th><th>Nombre</th><th>Teléfono</th><th>Tipo</th><th>Estado</th><th>Registro</th><th>Acciones</th></tr>
+        </thead>
+        <tbody>
+          {% for c in clientes %}
+          <tr>
+            <td class="table-cell-mono">{{ c.id_cliente }}</td>
+            <td class="table-cell-primary">
+              <div class="d-flex align-center gap-1">
+                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;{{'background:linear-gradient(135deg,#7c3aed,#ec4899);' if c.tipo_cliente=='REGISTRADO' else 'background:linear-gradient(135deg,#64748b,#94a3b8);'}}">{{ c.nombre[0] }}</div>
+                {{ c.nombre }}
+              </div>
+            </td>
+            <td class="font-mono">{{ c.telefono }}</td>
+            <td>
+              {% if c.tipo_cliente == 'REGISTRADO' %}
+                <span class="badge badge-success">⭐ Registrado</span>
+              {% else %}
+                <span class="badge badge-warning">🚶 Ocasional</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if c.estado == 'ACTIVO' %}
+                <span class="badge badge-success"><span class="status-dot online"></span> Activo</span>
+              {% else %}
+                <span class="badge badge-danger"><span class="status-dot offline"></span> Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ c.fecha_registro[:10] }}</td>
+            <td>
+              <div class="d-flex gap-1">
+                <button class="btn btn-ghost btn-sm" title="Ver detalle"
+                  onclick="verCliente({{ c.id_cliente }},'{{ c.nombre }}','{{ c.telefono }}','{{ c.tipo_cliente }}','{{ c.estado }}','{{ c.fecha_registro }}')">👁️</button>
+                <button class="btn btn-ghost btn-sm" title="Editar"
+                  onclick="abrirEditarCliente({{ c.id_cliente }},'{{ c.nombre }}','{{ c.telefono }}','{{ c.tipo_cliente }}','{{ c.estado }}')">✏️</button>
+                <button class="btn btn-danger btn-sm" title="Eliminar"
+                  onclick="eliminarCliente({{ c.id_cliente }},'{{ c.nombre }}')">🗑️</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Crear Cliente -->
+<div class="modal-overlay" id="modal-crear-cliente">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Nuevo Cliente</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <form id="form-crear-cliente">
+        <div class="form-group">
+          <label class="form-label">Nombre completo</label>
+          <input type="text" name="nombre" class="form-input-no-icon" placeholder="Ej: María García" required>
+        </div>
+        <div class="grid-form-row">
+          <div class="form-group">
+            <label class="form-label">Teléfono</label>
+            <input type="tel" name="telefono" class="form-input-no-icon" placeholder="614 123 4567" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo de cliente</label>
+            <select name="tipo_cliente" class="form-select" required>
+              <option value="OCASIONAL">🚶 Ocasional</option>
+              <option value="REGISTRADO">⭐ Registrado</option>
+            </select>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="crearCliente()">Guardar Cliente</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Cliente -->
+<div class="modal-overlay" id="modal-editar-cliente">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Editar Cliente</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-cliente-id">
+      <div class="form-group">
+        <label class="form-label">Nombre</label>
+        <input type="text" id="edit-cliente-nombre" class="form-input-no-icon" required>
+      </div>
+      <div class="grid-form-row">
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input type="tel" id="edit-cliente-telefono" class="form-input-no-icon">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select id="edit-cliente-tipo" class="form-select">
+            <option value="OCASIONAL">Ocasional</option>
+            <option value="REGISTRADO">Registrado</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select id="edit-cliente-estado" class="form-select">
+          <option value="ACTIVO">Activo</option>
+          <option value="INACTIVO">Inactivo</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditarCliente()">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Ver Cliente -->
+<div class="modal-overlay" id="modal-ver-cliente">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">👤 Detalle del Cliente</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <div class="pension-card" style="border:none;padding:0;">
+        <div class="pension-card-body" style="grid-template-columns:1fr 1fr;">
+          <div class="pension-detail"><div class="pension-detail-label">ID</div><div class="pension-detail-value mono" id="ver-cliente-id"></div></div>
+          <div class="pension-detail"><div class="pension-detail-label">Nombre</div><div class="pension-detail-value" id="ver-cliente-nombre"></div></div>
+          <div class="pension-detail"><div class="pension-detail-label">Teléfono</div><div class="pension-detail-value mono" id="ver-cliente-telefono"></div></div>
+          <div class="pension-detail"><div class="pension-detail-label">Tipo</div><div class="pension-detail-value" id="ver-cliente-tipo"></div></div>
+          <div class="pension-detail"><div class="pension-detail-label">Estado</div><div class="pension-detail-value" id="ver-cliente-estado"></div></div>
+          <div class="pension-detail"><div class="pension-detail-label">Fecha Registro</div><div class="pension-detail-value" id="ver-cliente-fecha"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cerrar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'layout.html' %}
+
+{% block title %}Dashboard — ParkSystem{% endblock %}
+{% block page_title %}Dashboard <span>Resumen del sistema</span>{% endblock %}
+
+{% block page_content %}
+<div class="stats-grid">
+  <div class="stat-card teal">
+    <div class="stat-card-header">
+      <div class="stat-card-icon">🚗</div>
+      <span class="stat-card-trend up">En vivo</span>
+    </div>
+    <div class="stat-card-value" data-count="{{ stats.vehiculos_dentro }}">0</div>
+    <div class="stat-card-label">Vehículos dentro</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-card-header">
+      <div class="stat-card-icon">👥</div>
+    </div>
+    <div class="stat-card-value" data-count="{{ stats.total_clientes }}">0</div>
+    <div class="stat-card-label">Clientes activos</div>
+  </div>
+  <div class="stat-card pink">
+    <div class="stat-card-header">
+      <div class="stat-card-icon">💰</div>
+    </div>
+    <div class="stat-card-value">$<span data-count="{{ stats.ingresos_mes|int }}">0</span></div>
+    <div class="stat-card-label">Ingresos del mes</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-card-header">
+      <div class="stat-card-icon">📋</div>
+    </div>
+    <div class="stat-card-value" data-count="{{ stats.pensiones_activas }}">0</div>
+    <div class="stat-card-label">Pensiones activas</div>
+  </div>
+</div>
+
+<div class="quick-actions">
+  <a href="{{ url_for('estancias') }}" class="quick-action">
+    <div class="quick-action-icon">🚗</div>
+    <div class="quick-action-label">Registrar Entrada</div>
+    <div class="quick-action-desc">Ingreso de vehículo</div>
+  </a>
+  <a href="{{ url_for('estancias') }}" class="quick-action">
+    <div class="quick-action-icon" style="background:rgba(124,58,237,0.1);color:var(--accent-purple);">🏁</div>
+    <div class="quick-action-label">Registrar Salida</div>
+    <div class="quick-action-desc">Salida y cobro automático</div>
+  </a>
+  <a href="{{ url_for('clientes') }}" class="quick-action">
+    <div class="quick-action-icon" style="background:rgba(236,72,153,0.1);color:var(--accent-pink);">👤</div>
+    <div class="quick-action-label">Nuevo Cliente</div>
+    <div class="quick-action-desc">Registrado u ocasional</div>
+  </a>
+  {% if session.user.perfil == 'admin' %}
+  <a href="{{ url_for('reportes') }}" class="quick-action">
+    <div class="quick-action-icon" style="background:rgba(245,158,11,0.1);color:var(--accent-amber);">📊</div>
+    <div class="quick-action-label">Ver Reportes</div>
+    <div class="quick-action-desc">Estadísticas e informes</div>
+  </a>
+  {% endif %}
+</div>
+
+<div class="grid-2">
+  <div class="content-card">
+    <div class="content-card-header">
+      <h2 class="content-card-title"><span class="card-icon">🚗</span> Estancias Activas</h2>
+      <a href="{{ url_for('estancias') }}" class="btn btn-ghost btn-sm">Ver todas →</a>
+    </div>
+    <div class="content-card-body" style="padding:0;">
+      {% if estancias_activas %}
+      <div class="table-container">
+        <table class="data-table">
+          <thead><tr><th>Placa</th><th>Entrada</th><th>Tarifa</th><th>Tiempo</th></tr></thead>
+          <tbody>
+            {% for e in estancias_activas %}
+            {% set v = get_vehiculo(e.id_vehiculo) %}
+            {% set t = get_tarifa(e.id_tarifa) %}
+            <tr>
+              <td class="table-cell-mono">{{ v.placa if v else 'N/A' }}</td>
+              <td>{{ e.fecha_entrada }}</td>
+              <td><span class="badge badge-info">{{ t.descripcion if t else '—' }}</span></td>
+              <td class="table-cell-primary">{{ calcular_estancia(e) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-state-icon">🅿️</div>
+        <h3>Sin vehículos activos</h3>
+        <p>No hay vehículos actualmente en el estacionamiento</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="content-card">
+    <div class="content-card-header">
+      <h2 class="content-card-title"><span class="card-icon">💲</span> Ejemplo de Tarifa</h2>
+    </div>
+    <div class="content-card-body">
+      <div class="price-info" style="grid-template-columns:1fr;">
+        {% for t in tarifas if t.estado == 'ACTIVA' %}
+        <div class="price-card">
+          <div class="price-card-title">{{ t.descripcion }}</div>
+          <div class="price-card-amount">${{ "%.2f"|format(t.costo_inicial) }}</div>
+          <div class="price-card-unit">por los primeros {{ t.tiempo_inicial_min }} min</div>
+          <div class="price-card-note">Después: ${{ "%.2f"|format(t.costo_por_min_extra) }} por minuto extra</div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="price-card mt-2" style="text-align:left; background:rgba(0,212,170,0.05); border-color:rgba(0,212,170,0.2);">
+        <div class="price-card-title">📐 Ejemplo de cálculo</div>
+        <div class="text-secondary" style="font-size:0.85rem;">
+          Estancia de <strong>90 min</strong> con Tarifa Estándar:<br>
+          $20.00 + (30 min × $0.25) = <strong style="color:var(--accent-primary);">$27.50</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

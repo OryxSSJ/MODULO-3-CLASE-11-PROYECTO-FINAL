@@ -1,0 +1,113 @@
+{% extends 'layout.html' %}
+{% block title %}Tarifas — ParkSystem{% endblock %}
+{% block page_title %}Tarifas <span>Configuración de tarifas</span>{% endblock %}
+
+{% block page_content %}
+<div class="stats-grid">
+  <div class="stat-card teal">
+    <div class="stat-card-header"><div class="stat-card-icon">💲</div></div>
+    <div class="stat-card-value" data-count="{{ tarifas|length }}">0</div>
+    <div class="stat-card-label">Total tarifas</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-card-header"><div class="stat-card-icon">✅</div></div>
+    <div class="stat-card-value" data-count="{{ tarifas|selectattr('estado','equalto','ACTIVA')|list|length }}">0</div>
+    <div class="stat-card-label">Activas</div>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="content-card-header">
+    <h2 class="content-card-title"><span class="card-icon">💲</span> Lista de Tarifas</h2>
+    <button class="btn btn-primary btn-sm" data-modal="modal-crear-tarifa">+ Nueva Tarifa</button>
+  </div>
+  <div class="content-card-body" style="padding:0;">
+    <div class="table-container">
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>Descripción</th><th>Tiempo Inicial</th><th>Costo Inicial</th><th>Costo/Min Extra</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <tbody>
+          {% for t in tarifas %}
+          <tr>
+            <td class="table-cell-mono">{{ t.id_tarifa }}</td>
+            <td class="table-cell-primary">{{ t.descripcion }}</td>
+            <td>{{ t.tiempo_inicial_min }} min</td>
+            <td class="table-cell-primary" style="font-weight:700;">${{ "%.2f"|format(t.costo_inicial) }}</td>
+            <td class="table-cell-mono">${{ "%.4f"|format(t.costo_por_min_extra) }}</td>
+            <td>
+              {% if t.estado == 'ACTIVA' %}<span class="badge badge-success">✅ Activa</span>
+              {% else %}<span class="badge badge-danger">❌ Inactiva</span>{% endif %}
+            </td>
+            <td>
+              <button class="btn btn-ghost btn-sm" onclick="abrirEditarTarifa({{ t.id_tarifa }},'{{ t.descripcion }}',{{ t.tiempo_inicial_min }},{{ t.costo_inicial }},{{ t.costo_por_min_extra }},'{{ t.estado }}')">✏️</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="content-card-header">
+    <h2 class="content-card-title"><span class="card-icon">📐</span> Fórmula de Cálculo</h2>
+  </div>
+  <div class="content-card-body">
+    <div class="price-card" style="text-align:left;background:rgba(0,212,170,0.05);border-color:rgba(0,212,170,0.2);">
+      <div class="price-card-title">Cómo se calcula el cobro</div>
+      <div class="text-secondary" style="font-size:0.9rem;line-height:1.8;">
+        Si el tiempo ≤ <strong>tiempo_inicial_min</strong>: se cobra <strong>costo_inicial</strong><br>
+        Si el tiempo > <strong>tiempo_inicial_min</strong>:<br>
+        &nbsp;&nbsp;Monto = <strong style="color:var(--accent-primary);">costo_inicial + (minutos_extra × costo_por_min_extra)</strong><br><br>
+        <strong>Ejemplo:</strong> Tarifa Estándar, estancia de 90 min:<br>
+        &nbsp;&nbsp;$20.00 + (30 × $0.25) = <strong style="color:var(--accent-primary);">$27.50</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Crear Tarifa -->
+<div class="modal-overlay" id="modal-crear-tarifa">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Nueva Tarifa</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <form id="form-crear-tarifa">
+        <div class="form-group"><label class="form-label">Descripción</label><input type="text" name="descripcion" class="form-input-no-icon" placeholder="Ej: Tarifa Nocturna" required></div>
+        <div class="grid-form-row">
+          <div class="form-group"><label class="form-label">Tiempo Inicial (min)</label><input type="number" name="tiempo_inicial_min" class="form-input-no-icon" value="60" required></div>
+          <div class="form-group"><label class="form-label">Costo Inicial ($)</label><input type="number" name="costo_inicial" class="form-input-no-icon" value="20.00" step="0.01" required></div>
+        </div>
+        <div class="form-group"><label class="form-label">Costo por Minuto Extra ($)</label><input type="number" name="costo_por_min_extra" class="form-input-no-icon" value="0.25" step="0.0001" required></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="crearTarifa()">Guardar Tarifa</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Tarifa -->
+<div class="modal-overlay" id="modal-editar-tarifa">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Editar Tarifa</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-tarifa-id">
+      <div class="form-group"><label class="form-label">Descripción</label><input type="text" id="edit-tarifa-desc" class="form-input-no-icon"></div>
+      <div class="grid-form-row">
+        <div class="form-group"><label class="form-label">Tiempo Inicial (min)</label><input type="number" id="edit-tarifa-tiempo" class="form-input-no-icon"></div>
+        <div class="form-group"><label class="form-label">Costo Inicial ($)</label><input type="number" id="edit-tarifa-costo" class="form-input-no-icon" step="0.01"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Costo/Min Extra ($)</label><input type="number" id="edit-tarifa-extra" class="form-input-no-icon" step="0.0001"></div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select id="edit-tarifa-estado" class="form-select"><option value="ACTIVA">Activa</option><option value="INACTIVA">Inactiva</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditarTarifa()">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

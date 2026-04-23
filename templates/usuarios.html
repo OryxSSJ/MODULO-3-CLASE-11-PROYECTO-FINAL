@@ -1,0 +1,118 @@
+{% extends 'layout.html' %}
+{% block title %}Usuarios — ParkSystem{% endblock %}
+{% block page_title %}Usuarios <span>Gestión de usuarios del sistema</span>{% endblock %}
+
+{% block page_content %}
+<div class="stats-grid">
+  <div class="stat-card teal">
+    <div class="stat-card-header"><div class="stat-card-icon">👥</div></div>
+    <div class="stat-card-value" data-count="{{ usuarios|length }}">0</div>
+    <div class="stat-card-label">Total usuarios</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-card-header"><div class="stat-card-icon">🔑</div></div>
+    <div class="stat-card-value" data-count="{{ usuarios|selectattr('perfil','equalto','admin')|list|length }}">0</div>
+    <div class="stat-card-label">Administradores</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-card-header"><div class="stat-card-icon">💼</div></div>
+    <div class="stat-card-value" data-count="{{ usuarios|selectattr('perfil','equalto','cobrador')|list|length }}">0</div>
+    <div class="stat-card-label">Cobradores</div>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="content-card-header">
+    <h2 class="content-card-title"><span class="card-icon">🔑</span> Lista de Usuarios</h2>
+    <div class="content-card-actions">
+      <input type="text" placeholder="Buscar usuario..." class="form-input-no-icon" style="width:220px;padding:0.5rem 1rem;font-size:0.85rem;" data-search-table="users-table">
+      <button class="btn btn-primary btn-sm" data-modal="modal-crear-usuario">+ Nuevo Usuario</button>
+    </div>
+  </div>
+  <div class="content-card-body" style="padding:0;">
+    <div class="table-container">
+      <table class="data-table" id="users-table">
+        <thead><tr><th>ID</th><th>Nombre</th><th>Email</th><th>Username</th><th>Perfil</th><th>Acciones</th></tr></thead>
+        <tbody>
+          {% for u in usuarios %}
+          <tr>
+            <td class="table-cell-mono">{{ u.id_usuario }}</td>
+            <td class="table-cell-primary">
+              <div class="d-flex align-center gap-1">
+                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;">{{ u.nombre[0] }}</div>
+                {{ u.nombre }}
+              </div>
+            </td>
+            <td>{{ u.email }}</td>
+            <td class="table-cell-mono">{{ u.username }}</td>
+            <td>
+              {% if u.perfil == 'admin' %}<span class="badge badge-purple">🔑 Admin</span>
+              {% else %}<span class="badge badge-info">💼 Cobrador</span>{% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <button class="btn btn-ghost btn-sm" onclick="abrirEditarUsuario({{ u.id_usuario }},'{{ u.nombre }}','{{ u.email }}','{{ u.username }}','{{ u.perfil }}')">✏️</button>
+                <button class="btn btn-danger btn-sm" onclick="eliminarUsuario({{ u.id_usuario }},'{{ u.nombre }}')">🗑️</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Crear Usuario -->
+<div class="modal-overlay" id="modal-crear-usuario">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Nuevo Usuario</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <form id="form-crear-usuario">
+        <div class="form-group"><label class="form-label">Nombre</label><input type="text" name="nombre" class="form-input-no-icon" placeholder="Nombre completo" required></div>
+        <div class="grid-form-row">
+          <div class="form-group"><label class="form-label">Email</label><input type="email" name="email" class="form-input-no-icon" placeholder="correo@ejemplo.com" required></div>
+          <div class="form-group"><label class="form-label">Username</label><input type="text" name="username" class="form-input-no-icon" placeholder="usuario123" required></div>
+        </div>
+        <div class="grid-form-row">
+          <div class="form-group"><label class="form-label">Contraseña</label><input type="password" name="password" class="form-input-no-icon" placeholder="••••••••" required></div>
+          <div class="form-group">
+            <label class="form-label">Perfil</label>
+            <select name="perfil" class="form-select"><option value="cobrador">Cobrador</option><option value="admin">Administrador</option></select>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="crearUsuario()">Guardar Usuario</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Usuario -->
+<div class="modal-overlay" id="modal-editar-usuario">
+  <div class="modal">
+    <div class="modal-header"><h3 class="modal-title">Editar Usuario</h3><button class="modal-close">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-usuario-id">
+      <div class="form-group"><label class="form-label">Nombre</label><input type="text" id="edit-usuario-nombre" class="form-input-no-icon"></div>
+      <div class="grid-form-row">
+        <div class="form-group"><label class="form-label">Email</label><input type="email" id="edit-usuario-email" class="form-input-no-icon"></div>
+        <div class="form-group"><label class="form-label">Username</label><input type="text" id="edit-usuario-username" class="form-input-no-icon"></div>
+      </div>
+      <div class="grid-form-row">
+        <div class="form-group"><label class="form-label">Nueva Contraseña (dejar vacío para no cambiar)</label><input type="password" id="edit-usuario-password" class="form-input-no-icon" placeholder="••••••••"></div>
+        <div class="form-group">
+          <label class="form-label">Perfil</label>
+          <select id="edit-usuario-perfil" class="form-select"><option value="cobrador">Cobrador</option><option value="admin">Administrador</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEditarUsuario()">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
