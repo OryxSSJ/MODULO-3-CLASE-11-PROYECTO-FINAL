@@ -11,7 +11,7 @@
   </div>
   <div class="stat-card purple">
     <div class="stat-card-header"><div class="stat-card-icon">✅</div></div>
-    <div class="stat-card-value" data-count="{{ tarifas|selectattr('estado','equalto','ACTIVA')|list|length }}">0</div>
+    <div class="stat-card-value" data-count="{{ tarifas|selectattr('estado', 'defined')|selectattr('estado','equalto','ACTIVA')|list|length }}">0</div>
     <div class="stat-card-label">Activas</div>
   </div>
 </div>
@@ -28,17 +28,18 @@
         <tbody>
           {% for t in tarifas %}
           <tr>
-            <td class="table-cell-mono">{{ t.id_tarifa }}</td>
-            <td class="table-cell-primary">{{ t.descripcion }}</td>
-            <td>{{ t.tiempo_inicial_min }} min</td>
-            <td class="table-cell-primary" style="font-weight:700;">${{ "%.2f"|format(t.costo_inicial) }}</td>
-            <td class="table-cell-mono">${{ "%.4f"|format(t.costo_por_min_extra) }}</td>
+            <td class="table-cell-mono">{{ t.id or t.id_tarifa }}</td>
+            <td class="table-cell-primary">{{ t.descripcion or 'Sin descripción' }}</td>
+            <td>{{ t.tiempo_inicial_min or 0 }} min</td>
+            <td class="table-cell-primary" style="font-weight:700;">${{ "%.2f"|format(t.costo_inicial or 0) }}</td>
+            <td class="table-cell-mono">${{ "%.4f"|format(t.costo_por_min_extra or 0) }}</td>
             <td>
               {% if t.estado == 'ACTIVA' %}<span class="badge badge-success">✅ Activa</span>
               {% else %}<span class="badge badge-danger">❌ Inactiva</span>{% endif %}
             </td>
             <td>
-              <button class="btn btn-ghost btn-sm" onclick="abrirEditarTarifa({{ t.id_tarifa }},'{{ t.descripcion }}',{{ t.tiempo_inicial_min }},{{ t.costo_inicial }},{{ t.costo_por_min_extra }},'{{ t.estado }}')">✏️</button>
+              <button class="btn btn-ghost btn-sm" title="Editar" 
+                onclick="abrirEditarTarifa('{{ t.id or t.id_tarifa }}', '{{ t.descripcion or "" }}', '{{ t.tiempo_inicial_min or 0 }}', '{{ t.costo_inicial or 0 }}', '{{ t.costo_por_min_extra or 0 }}', '{{ t.estado or "INACTIVA" }}')">✏️</button>
             </td>
           </tr>
           {% endfor %}
@@ -66,7 +67,6 @@
   </div>
 </div>
 
-<!-- MODAL: Crear Tarifa -->
 <div class="modal-overlay" id="modal-crear-tarifa">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">Nueva Tarifa</h3><button class="modal-close">✕</button></div>
@@ -87,7 +87,6 @@
   </div>
 </div>
 
-<!-- MODAL: Editar Tarifa -->
 <div class="modal-overlay" id="modal-editar-tarifa">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">Editar Tarifa</h3><button class="modal-close">✕</button></div>

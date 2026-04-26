@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from functools import wraps
+import mysql.connector
 from datetime import datetime, timedelta
 import os, math
 
@@ -7,125 +8,21 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
 # ============================================================
-# DATOS DE PRUEBA — Basados en el Diagrama ER
+# Configuracion de la db
 # ============================================================
-
-# --- Usuarios (para login, no está en el ER pero se necesita) ---
-usuarios_db = [
-    {"id_usuario": 1, "nombre": "Admin Principal", "email": "admin@parking.com", "username": "admin", "password": "admin123", "perfil": "admin"},
-    {"id_usuario": 2, "nombre": "Carlos López", "email": "carlos@parking.com", "username": "cobrador1", "password": "cobrador123", "perfil": "cobrador"},
-    {"id_usuario": 3, "nombre": "María García", "email": "maria@parking.com", "username": "cobrador2", "password": "cobrador123", "perfil": "cobrador"},
-]
-
-# --- CLIENTE ---
-clientes_db = [
-    {"id_cliente": 1, "nombre": "Juan Pérez", "telefono": "6141234567", "tipo_cliente": "REGISTRADO", "fecha_registro": "2024-01-15 10:30:00", "estado": "ACTIVO"},
-    {"id_cliente": 2, "nombre": "Ana Martínez", "telefono": "6149876543", "tipo_cliente": "REGISTRADO", "fecha_registro": "2025-06-01 14:00:00", "estado": "ACTIVO"},
-    {"id_cliente": 3, "nombre": "Roberto Sánchez", "telefono": "6145551234", "tipo_cliente": "OCASIONAL", "fecha_registro": "2026-03-10 09:15:00", "estado": "ACTIVO"},
-    {"id_cliente": 4, "nombre": "Laura Domínguez", "telefono": "6147778899", "tipo_cliente": "REGISTRADO", "fecha_registro": "2023-08-20 11:45:00", "estado": "ACTIVO"},
-    {"id_cliente": 5, "nombre": "Pedro Ramírez", "telefono": "6142223344", "tipo_cliente": "OCASIONAL", "fecha_registro": "2026-04-01 16:20:00", "estado": "INACTIVO"},
-]
-
-# --- VEHICULO ---
-vehiculos_db = [
-    {"id_vehiculo": 1, "placa": "CHH-123-A", "marca": "Toyota", "modelo": "Corolla 2022", "color": "Blanco", "id_cliente": 1},
-    {"id_vehiculo": 2, "placa": "CHH-456-B", "marca": "Honda", "modelo": "Civic 2021", "color": "Negro", "id_cliente": 2},
-    {"id_vehiculo": 3, "placa": "CHH-789-C", "marca": "Nissan", "modelo": "Versa 2023", "color": "Rojo", "id_cliente": 3},
-    {"id_vehiculo": 4, "placa": "CHH-012-D", "marca": "Ford", "modelo": "Focus 2020", "color": "Azul", "id_cliente": 1},
-    {"id_vehiculo": 5, "placa": "CHH-345-E", "marca": "Chevrolet", "modelo": "Aveo 2024", "color": "Gris", "id_cliente": 4},
-    {"id_vehiculo": 6, "placa": "CHH-678-F", "marca": "Volkswagen", "modelo": "Jetta 2022", "color": "Blanco", "id_cliente": 5},
-]
-
-# --- TARIFA ---
-tarifas_db = [
-    {"id_tarifa": 1, "descripcion": "Tarifa Estándar", "tiempo_inicial_min": 60, "costo_inicial": 20.00, "costo_por_min_extra": 0.25, "estado": "ACTIVA", "fecha_creacion": "2026-01-01 00:00:00"},
-    {"id_tarifa": 2, "descripcion": "Tarifa Nocturna", "tiempo_inicial_min": 120, "costo_inicial": 15.00, "costo_por_min_extra": 0.15, "estado": "ACTIVA", "fecha_creacion": "2026-01-01 00:00:00"},
-    {"id_tarifa": 3, "descripcion": "Tarifa Fin de Semana", "tiempo_inicial_min": 90, "costo_inicial": 25.00, "costo_por_min_extra": 0.30, "estado": "ACTIVA", "fecha_creacion": "2026-02-15 00:00:00"},
-    {"id_tarifa": 4, "descripcion": "Tarifa Especial Eventos", "tiempo_inicial_min": 60, "costo_inicial": 35.00, "costo_por_min_extra": 0.40, "estado": "INACTIVA", "fecha_creacion": "2026-03-01 00:00:00"},
-]
-
-# --- ESTANCIA ---
-estancias_db = [
-    {"id_estancia": 1, "id_vehiculo": 1, "fecha_entrada": "2026-04-23 08:30:00", "fecha_salida": None, "id_tarifa": 1, "es_pension": False},
-    {"id_estancia": 2, "id_vehiculo": 2, "fecha_entrada": "2026-04-23 09:15:00", "fecha_salida": None, "id_tarifa": 1, "es_pension": False},
-    {"id_estancia": 3, "id_vehiculo": 3, "fecha_entrada": "2026-04-22 10:00:00", "fecha_salida": "2026-04-22 11:30:00", "id_tarifa": 1, "es_pension": False},
-    {"id_estancia": 4, "id_vehiculo": 5, "fecha_entrada": "2026-04-23 07:45:00", "fecha_salida": None, "id_tarifa": 1, "es_pension": True},
-    {"id_estancia": 5, "id_vehiculo": 4, "fecha_entrada": "2026-04-21 14:00:00", "fecha_salida": "2026-04-21 16:15:00", "id_tarifa": 2, "es_pension": False},
-]
-
-# --- PENSION ---
-pensiones_db = [
-    {"id_pension": 1, "id_cliente": 1, "fecha_inicio": "2024-01-15", "fecha_fin": "2026-01-15", "costo_mensual": 2500.00, "estado": "ACTIVA", "observaciones": "Cliente frecuente desde 2024"},
-    {"id_pension": 2, "id_cliente": 4, "fecha_inicio": "2025-06-01", "fecha_fin": "2026-06-01", "costo_mensual": 2500.00, "estado": "ACTIVA", "observaciones": None},
-    {"id_pension": 3, "id_cliente": 2, "fecha_inicio": "2025-01-01", "fecha_fin": "2025-12-31", "costo_mensual": 2200.00, "estado": "CANCELADA", "observaciones": "Cancelada por cambio de domicilio"},
-]
-
-# --- PAGO ---
-pagos_db = [
-    {"id_pago": 1, "id_estancia": 3, "id_pension": None, "monto": 27.50, "fecha_pago": "2026-04-22 11:30:00", "metodo_pago": "EFECTIVO", "referencia": None, "observaciones": None},
-    {"id_pago": 2, "id_estancia": 5, "id_pension": None, "monto": 33.75, "fecha_pago": "2026-04-21 16:15:00", "metodo_pago": "TARJETA", "referencia": "TXN-00452", "observaciones": None},
-    {"id_pago": 3, "id_estancia": None, "id_pension": 1, "monto": 2500.00, "fecha_pago": "2026-04-01 10:00:00", "metodo_pago": "TRANSFERENCIA", "referencia": "SPEI-789456", "observaciones": "Pago pensión abril 2026"},
-    {"id_pago": 4, "id_estancia": None, "id_pension": 2, "monto": 2500.00, "fecha_pago": "2026-04-01 11:00:00", "metodo_pago": "EFECTIVO", "referencia": None, "observaciones": "Pago pensión abril 2026"},
-]
-
-# ID counters
-next_ids = {
-    "cliente": 6, "vehiculo": 7, "estancia": 6, "tarifa": 5, "pension": 4, "pago": 5, "usuario": 4
+DB_CONFIG ={
+    'host': 'localhost',
+    'user': 'root',
+    'password': '',
+    'database': 'estacionamiento_db'
 }
-
-
-# ============================================================
-# HELPERS
-# ============================================================
-
-def get_cliente(id_cliente):
-    return next((c for c in clientes_db if c['id_cliente'] == id_cliente), None)
-
-def get_vehiculo(id_vehiculo):
-    return next((v for v in vehiculos_db if v['id_vehiculo'] == id_vehiculo), None)
-
-def get_vehiculo_by_placa(placa):
-    return next((v for v in vehiculos_db if v['placa'] == placa), None)
-
-def get_tarifa(id_tarifa):
-    return next((t for t in tarifas_db if t['id_tarifa'] == id_tarifa), None)
-
-def get_pension(id_pension):
-    return next((p for p in pensiones_db if p['id_pension'] == id_pension), None)
-
-def calcular_monto(estancia):
-    """Calcula el monto según la tarifa: costo_inicial por tiempo_inicial_min, luego costo_por_min_extra."""
-    tarifa = get_tarifa(estancia['id_tarifa'])
-    if not tarifa:
-        return 0
-    entrada = datetime.strptime(estancia['fecha_entrada'], "%Y-%m-%d %H:%M:%S")
-    if estancia['fecha_salida']:
-        salida = datetime.strptime(estancia['fecha_salida'], "%Y-%m-%d %H:%M:%S")
-    else:
-        salida = datetime.now()
-    minutos = max(1, int((salida - entrada).total_seconds() / 60))
-    if minutos <= tarifa['tiempo_inicial_min']:
-        return tarifa['costo_inicial']
-    else:
-        extra = minutos - tarifa['tiempo_inicial_min']
-        return round(tarifa['costo_inicial'] + extra * tarifa['costo_por_min_extra'], 2)
-
-def calcular_estancia_str(estancia):
-    """Returns a human-readable duration string."""
-    entrada = datetime.strptime(estancia['fecha_entrada'], "%Y-%m-%d %H:%M:%S")
-    if estancia['fecha_salida']:
-        salida = datetime.strptime(estancia['fecha_salida'], "%Y-%m-%d %H:%M:%S")
-    else:
-        salida = datetime.now()
-    delta = salida - entrada
-    hours = int(delta.total_seconds() // 3600)
-    mins = int((delta.total_seconds() % 3600) // 60)
-    return f"{hours}h {mins}m"
-
 
 # ============================================================
 # AUTH DECORATORS
 # ============================================================
+def get_db_connection():
+    """Establece y retorna la conexion a la base de datos"""
+    return mysql.connector.connect(**DB_CONFIG)
 
 def login_required(f):
     @wraps(f)
@@ -148,33 +45,6 @@ def admin_required(f):
 
 
 # ============================================================
-# TEMPLATE CONTEXT
-# ============================================================
-
-@app.context_processor
-def inject_helpers():
-    def _get_cliente(id_c):
-        return get_cliente(id_c)
-    def _get_vehiculo(id_v):
-        return get_vehiculo(id_v)
-    def _get_tarifa(id_t):
-        return get_tarifa(id_t)
-    def _calcular_monto(est):
-        return calcular_monto(est)
-    def _calcular_estancia(est):
-        return calcular_estancia_str(est)
-    active_count = len([e for e in estancias_db if not e['fecha_salida']])
-    return dict(
-        get_cliente=_get_cliente,
-        get_vehiculo=_get_vehiculo,
-        get_tarifa=_get_tarifa,
-        calcular_monto=_calcular_monto,
-        calcular_estancia=_calcular_estancia,
-        vehiculos_activos_count=active_count,
-    )
-
-
-# ============================================================
 # PAGE ROUTES
 # ============================================================
 
@@ -190,13 +60,25 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '')
         password = request.form.get('password', '')
-        user = next((u for u in usuarios_db if u['username'] == username and u['password'] == password), None)
-        if user:
-            session['user'] = user
-            flash('Bienvenido, ' + user['nombre'], 'success')
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Usuario o contraseña incorrectos', 'error')
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor(dictionary=True) 
+            
+            # evitar SQL injection
+            query = "SELECT * FROM Usuarios WHERE username = %s AND password = %s"
+            cursor.execute(query, (username, password))
+            user = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            if user:
+                session['user'] = user
+                flash('Bienvenido, '+ user['nombre'], 'success')
+                return redirect(url_for('dashboard'))
+            else:
+                flash('Usuario o contraseña incorrectos', 'error')
+        except mysql.connector.Error as err:
+            flash(f'Error de conexion a la base de datos: {err}', 'error')
+
     return render_template('login.html')
 
 
@@ -209,66 +91,239 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    estancias_activas = [e for e in estancias_db if not e['fecha_salida']]
-    total_ingresos_hoy = sum(p['monto'] for p in pagos_db if p['fecha_pago'].startswith('2026-04-23'))
-    total_ingresos_mes = sum(p['monto'] for p in pagos_db if p['fecha_pago'].startswith('2026-04'))
-    stats = {
-        "vehiculos_dentro": len(estancias_activas),
-        "total_clientes": len([c for c in clientes_db if c['estado'] == 'ACTIVO']),
-        "pensiones_activas": len([p for p in pensiones_db if p['estado'] == 'ACTIVA']),
-        "ingresos_hoy": total_ingresos_hoy,
-        "ingresos_mes": total_ingresos_mes,
-    }
-    return render_template('dashboard.html', stats=stats, estancias_activas=estancias_activas, tarifas=tarifas_db)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        #1 vehiculos dentro
+        cursor.execute("SELECT COUNT(*) as vehiculos_dentro FROM Servicios WHERE hora_salida IS NULL")
+        vehiculos_dentro = cursor.fetchone()['vehiculos_dentro']
+        #2 total clientes registrados
+        cursor.execute("SELECT COUNT(*) as total_clientes FROM Clientes")
+        total_clientes = cursor.fetchone()['total_clientes']
+        #3 ingresos dia de hoy
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        # Obtenemos los ingresos del día de hoy
+        cursor.execute("""
+            SELECT SUM(monto_total) as ingresos_hoy 
+            FROM cobros 
+            WHERE DATE(fecha_cobro) = CURDATE()
+        """)
+        resultado_ingresos = cursor.fetchone()
+        
+        # Si no hay cobros hoy, 'ingresos_hoy' será None. Lo convertimos a 0 de forma segura.
+        ingresos_hoy = 0
+        if resultado_ingresos and resultado_ingresos['ingresos_hoy'] is not None:
+            ingresos_hoy = resultado_ingresos['ingresos_hoy']
+
+        # Mandamos los datos al diccionario stats
+        stats = {
+            'ingresos_hoy': ingresos_hoy,
+            # Aquí dejas las demás variables que ya tenías en tu stats (entradas, salidas, etc)
+        }
+        # servicios activos
+        cursor.execute("""
+        SELECT s.folio_servicio, s.matricula, s.fecha_entrada, s.hora_entrada, p.tipo
+        FROM Servicios s
+        JOIN Precios p ON s.folio_precio = p.folio_precio
+        WHERE s.hora_salida IS NULL""")
+        estancias_activas = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+        return render_template('dashboard.html', stats=stats,
+                               estancias_activas = estancias_activas)
+    except mysql.connector.Error as err:
+        flash(f'Error de DB: {err}', 'error')
+        return render_template('dashboard.html', stats={}, estancias_activas=[])
 
 
 @app.route('/clientes')
 @login_required
 def clientes():
-    return render_template('clientes.html', clientes=clientes_db)
+    try:
+      conn = get_db_connection()
+      cursor = conn.cursor(dictionary=True)
+      #Todos los clientes
+      cursor.execute("SELECT * FROM Clientes")
+      lista_clientes = cursor.fetchall()
+      cursor.close()
+      conn.close()  
+      return render_template('clientes.html', clientes = lista_clientes)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar clientes: {err}', 'error')
+
+    return render_template('clientes.html', clientes=[])
 
 
 @app.route('/vehiculos')
 @login_required
 def vehiculos():
-    return render_template('vehiculos.html', vehiculos=vehiculos_db, clientes=clientes_db)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Traemos vehículos haciendo un JOIN con Clientes para mostrar el nombre del dueño
+        cursor.execute("""
+            SELECT v.*, c.nombre as nombre_cliente 
+            FROM Vehiculos v 
+            LEFT JOIN Clientes c ON v.cliente_id = c.cliente_id
+        """)
+        lista_vehiculos = cursor.fetchall()
+        
+        # También necesitamos la lista de clientes para el "select/dropdown" al registrar un vehículo
+        cursor.execute("SELECT cliente_id, nombre FROM Clientes")
+        lista_clientes = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return render_template('vehiculos.html', vehiculos=lista_vehiculos, clientes=lista_clientes)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar vehículos: {err}', 'error')
+        return render_template('vehiculos.html', vehiculos=[], clientes=[])
 
 
 @app.route('/estancias')
 @login_required
 def estancias():
-    return render_template('estancias.html', estancias=estancias_db, vehiculos=vehiculos_db, tarifas=[t for t in tarifas_db if t['estado'] == 'ACTIVA'])
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Traemos todos los servicios, mostrando primero los que no han salido
+        cursor.execute("""
+            SELECT s.*, p.precio, p.tipo as nombre_tarifa 
+            FROM Servicios s
+            LEFT JOIN Precios p ON s.folio_precio = p.folio_precio
+            ORDER BY s.fecha_salida ASC, s.fecha_entrada DESC, s.hora_entrada DESC
+        """)
+        lista_estancias = cursor.fetchall()
+        
+        # Necesitamos las matrículas registradas para el select de "Nueva Entrada"
+        cursor.execute("SELECT matricula FROM Vehiculos")
+        lista_vehiculos = cursor.fetchall()
+        
+        # Traemos los precios disponibles (ej. cajon paso, cajon frecuente)
+        cursor.execute("SELECT folio_precio, tipo, precio FROM Precios WHERE tipo = 'cajon'")
+        lista_tarifas = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return render_template('estancias.html', estancias=lista_estancias, vehiculos=lista_vehiculos, tarifas=lista_tarifas)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar estancias: {err}', 'error')
+        return render_template('estancias.html', estancias=[], vehiculos=[], tarifas=[])
 
 
 @app.route('/pagos')
 @login_required
 def pagos():
-    return render_template('pagos.html', pagos=pagos_db, estancias=estancias_db)
-
+    # La vista de pagos ahora lee de la tabla Cobros
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT c.*, s.fecha_salida, u.nombre as cobrador
+            FROM Cobros c
+            JOIN Servicios s ON c.folio_servicio = s.folio_servicio
+            JOIN Usuarios u ON c.usuario_id = u.usuario_id
+            ORDER BY s.fecha_salida DESC, c.hora_estancia DESC
+        """)
+        lista_cobros = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return render_template('pagos.html', pagos=lista_cobros)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar cobros: {err}', 'error')
+        return render_template('pagos.html', pagos=[])
 
 @app.route('/pensiones')
 @login_required
 def pensiones():
-    return render_template('pensiones.html', pensiones=pensiones_db, clientes=clientes_db, vehiculos=vehiculos_db)
-
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        # Traemos las pensiones haciendo JOIN para mostrar el nombre del cliente
+        cursor.execute("""
+            SELECT p.*, c.nombre as nombre_cliente 
+            FROM Pensiones p
+            JOIN Clientes c ON p.cliente_id = c.cliente_id
+        """)
+        lista_pensiones = cursor.fetchall()
+        
+        # Para el formulario de "Nueva Pensión" necesitamos la lista de clientes
+        cursor.execute("SELECT cliente_id, nombre FROM Clientes")
+        lista_clientes = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        return render_template('pensiones.html', pensiones=lista_pensiones, clientes=lista_clientes)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar pensiones: {err}', 'error')
+        return render_template('pensiones.html', pensiones=[], clientes=[])
 
 @app.route('/tarifas')
 @login_required
 def tarifas():
-    return render_template('tarifas.html', tarifas=tarifas_db)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        # Consultamos la tabla Precios
+        cursor.execute("SELECT * FROM Precios")
+        lista_precios = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return render_template('tarifas.html', tarifas=lista_precios)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar tarifas: {err}', 'error')
+        return render_template('tarifas.html', tarifas=[])
 
 
 @app.route('/usuarios')
 @admin_required
 def usuarios():
-    return render_template('usuarios.html', usuarios=usuarios_db)
-
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        # Traemos todos los usuarios, pero sin la contraseña por seguridad al mostrar en la vista
+        cursor.execute("SELECT usuario_id, nombre, email, username, perfil FROM Usuarios")
+        lista_usuarios = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return render_template('usuarios.html', usuarios=lista_usuarios)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar usuarios: {err}', 'error')
+        return render_template('usuarios.html', usuarios=[])
 
 @app.route('/reportes')
 @admin_required
 def reportes():
-    return render_template('reportes.html')
-
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Obtenemos los ingresos agrupados por fecha (últimos 7 días con actividad)
+        cursor.execute("""
+            SELECT s.fecha_salida as fecha, SUM(c.monto_total) as total_dia
+            FROM Cobros c
+            JOIN Servicios s ON c.folio_servicio = s.folio_servicio
+            WHERE s.fecha_salida IS NOT NULL
+            GROUP BY s.fecha_salida
+            ORDER BY s.fecha_salida DESC
+            LIMIT 7
+        """)
+        ingresos_recientes = cursor.fetchall()
+        
+        # Invertimos la lista para que la gráfica muestre el día más antiguo primero y el más reciente al final
+        ingresos_recientes.reverse()
+        
+        cursor.close()
+        conn.close()
+        
+        return render_template('reportes.html', ingresos=ingresos_recientes)
+    except mysql.connector.Error as err:
+        flash(f'Error al cargar reportes: {err}', 'error')
+        return render_template('reportes.html', ingresos=[])
 
 # ============================================================
 # CRUD API — CLIENTES
@@ -278,83 +333,159 @@ def reportes():
 @login_required
 def api_crear_cliente():
     data = request.json
-    nuevo = {
-        "id_cliente": next_ids["cliente"],
-        "nombre": data.get("nombre", ""),
-        "telefono": data.get("telefono", ""),
-        "tipo_cliente": data.get("tipo_cliente", "OCASIONAL"),
-        "fecha_registro": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "estado": "ACTIVO",
-    }
-    next_ids["cliente"] += 1
-    clientes_db.append(nuevo)
-    return jsonify({"success": True, "message": "Cliente registrado correctamente", "data": nuevo})
-
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        query = """INSERT INTO Clientes (nombre, telefono, email, rfc, usuario_id)
+                   VALUES ( %s, %s, %s, %s, %s)"""
+        #obetner el id de usuario logeado y registrando al cliente
+        usuario_id = session['user']['usuario_id']
+        valores = (
+            data.get("nombre", ""),
+            data.get("telefono", ""),
+            data.get("email", ""),
+            data.get("rfc", ""),
+            usuario_id)
+        cursor.execute(query, valores)
+        conn.commit()
+        nuevo_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Cliente registrado correctamente", "id": nuevo_id})
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de DB: {err}"})
 
 @app.route('/api/clientes/<int:id_cliente>', methods=['PUT'])
 @login_required
 def api_editar_cliente(id_cliente):
     data = request.json
-    cliente = get_cliente(id_cliente)
-    if not cliente:
-        return jsonify({"success": False, "message": "Cliente no encontrado"})
-    cliente['nombre'] = data.get('nombre', cliente['nombre'])
-    cliente['telefono'] = data.get('telefono', cliente['telefono'])
-    cliente['tipo_cliente'] = data.get('tipo_cliente', cliente['tipo_cliente'])
-    cliente['estado'] = data.get('estado', cliente['estado'])
-    return jsonify({"success": True, "message": "Cliente actualizado correctamente"})
-
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        query = """UPDATE Clientes
+                   SET nombre=%s, telefono=%s, email=%s, rfc=%s
+                   WHERE cliente_id=%s"""
+        valores = (
+            data.get("nombre"),
+            data.get("telefono"),
+            data.get("email"),
+            data.get("rfc"),
+            id_cliente)
+        cursor.execute(query, valores)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Cliente actualizado correctamente"})
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de DB: {err}"})
 
 @app.route('/api/clientes/<int:id_cliente>', methods=['DELETE'])
 @login_required
 def api_eliminar_cliente(id_cliente):
-    global clientes_db
-    clientes_db = [c for c in clientes_db if c['id_cliente'] != id_cliente]
-    return jsonify({"success": True, "message": "Cliente eliminado correctamente"})
+    try: 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        #Eliminar por llave primaria
+        cursor.execute("DELETE FROM Clientes WHERE cliente_id=%s", (id_cliente,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success":True,"message": "Cliente eliminado correctamente"})
+    except mysql.connector.Error as err:
+        #Si hay vehiculos registrados mysql bloqueara el borrado por llave foranea, hacer un trigger
+        return jsonify({"success":False, "message": "No se puede eliminar, cliente con vehiculos registrados"})
+
 
 
 # ============================================================
 # CRUD API — VEHICULOS
 # ============================================================
-
-@app.route('/api/vehiculos', methods=['POST'])
+from flask import request, jsonify
+@app.route('/api/vehiculos/crear', methods=['POST'])
 @login_required
 def api_crear_vehiculo():
-    data = request.json
-    nuevo = {
-        "id_vehiculo": next_ids["vehiculo"],
-        "placa": data.get("placa", "").upper(),
-        "marca": data.get("marca", ""),
-        "modelo": data.get("modelo", ""),
-        "color": data.get("color", ""),
-        "id_cliente": int(data.get("id_cliente", 0)),
-    }
-    next_ids["vehiculo"] += 1
-    vehiculos_db.append(nuevo)
-    return jsonify({"success": True, "message": "Vehículo registrado correctamente", "data": nuevo})
+    try:
+        # 1. Recibimos los datos que mandó app.js
+        datos = request.get_json()
+        
+        matricula = datos.get('matricula')
+        marca = datos.get('marca')
+        modelo = datos.get('modelo')
+        color = datos.get('color')
+        id_cliente = datos.get('id_cliente')
 
+        # 2. Conectamos a la BD usando tu función estándar
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO Vehiculos (matricula, marca, modelo, color, cliente_id) 
+            VALUES (%s, %s, %s, %s, %s)
+        """, (matricula, marca, modelo, color, id_cliente))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
 
-@app.route('/api/vehiculos/<int:id_vehiculo>', methods=['PUT'])
+        # 3. Respuesta de éxito
+        return jsonify({'success': True, 'mensaje': 'Vehículo registrado correctamente'})
+
+    except mysql.connector.Error as err:
+        return jsonify({'success': False, 'error': f"Error de BD: {err}"}), 500
+    except Exception as e:
+        print("Error en /api/vehiculos/crear:", e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+@app.route('/api/vehiculos/<int:matricula>', methods=['PUT'])
 @login_required
-def api_editar_vehiculo(id_vehiculo):
+def api_editar_vehiculo(matricula):
     data = request.json
-    v = get_vehiculo(id_vehiculo)
-    if not v:
-        return jsonify({"success": False, "message": "Vehículo no encontrado"})
-    v['placa'] = data.get('placa', v['placa']).upper()
-    v['marca'] = data.get('marca', v['marca'])
-    v['modelo'] = data.get('modelo', v['modelo'])
-    v['color'] = data.get('color', v['color'])
-    v['id_cliente'] = int(data.get('id_cliente', v['id_cliente']))
-    return jsonify({"success": True, "message": "Vehículo actualizado correctamente"})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # No actualizamos la matrícula porque es la llave primaria, solo el resto de los datos
+        query = """UPDATE Vehiculos 
+                   SET modelo=%s, marca=%s, color=%s, cliente_id=%s 
+                   WHERE matricula=%s"""
+                   
+        valores = (
+            data.get("modelo"),
+            data.get("marca"),
+            data.get("color"),
+            data.get("cliente_id"),
+            matricula
+        )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Vehículo actualizado correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
-@app.route('/api/vehiculos/<int:id_vehiculo>', methods=['DELETE'])
+@app.route('/api/vehiculos/<int:matricula>', methods=['DELETE'])
 @login_required
-def api_eliminar_vehiculo(id_vehiculo):
-    global vehiculos_db
-    vehiculos_db = [v for v in vehiculos_db if v['id_vehiculo'] != id_vehiculo]
-    return jsonify({"success": True, "message": "Vehículo eliminado correctamente"})
+def api_eliminar_vehiculo(matricula):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Eliminamos buscando por la matrícula (string)
+        cursor.execute("DELETE FROM Vehiculos WHERE matricula=%s", (matricula,))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Vehículo eliminado correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": "No se puede eliminar: el vehículo tiene servicios/cobros registrados."})
 
 
 # ============================================================
@@ -365,51 +496,106 @@ def api_eliminar_vehiculo(id_vehiculo):
 @login_required
 def api_crear_estancia():
     data = request.json
-    nueva = {
-        "id_estancia": next_ids["estancia"],
-        "id_vehiculo": int(data.get("id_vehiculo", 0)),
-        "fecha_entrada": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "fecha_salida": None,
-        "id_tarifa": int(data.get("id_tarifa", 1)),
-        "es_pension": data.get("es_pension", False),
-    }
-    next_ids["estancia"] += 1
-    estancias_db.append(nueva)
-    vehiculo = get_vehiculo(nueva['id_vehiculo'])
-    placa = vehiculo['placa'] if vehiculo else 'N/A'
-    return jsonify({"success": True, "message": f"Entrada registrada — Placa: {placa}", "data": nueva})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Obtenemos fecha y hora actual separadas
+        ahora = datetime.now()
+        fecha_ent = ahora.strftime("%Y-%m-%d")
+        hora_ent = ahora.strftime("%H:%M:%S")
+        
+        query = """INSERT INTO Servicios (matricula, fecha_entrada, hora_entrada, folio_precio, tipo_servicio) 
+                   VALUES (%s, %s, %s, %s, %s)"""
+                   
+        valores = (
+            data.get("matricula").upper(),
+            fecha_ent,
+            hora_ent,
+            data.get("folio_precio"), # El ID de la tarifa seleccionada
+            "cajon"
+        )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": f"Entrada registrada para el vehículo {valores[0]}"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
-
-@app.route('/api/estancias/<int:id_estancia>/salida', methods=['POST'])
+@app.route('/api/estancias/<int:folio_servicio>/salida', methods=['POST'])
 @login_required
-def api_registrar_salida(id_estancia):
-    estancia = next((e for e in estancias_db if e['id_estancia'] == id_estancia), None)
-    if not estancia:
-        return jsonify({"success": False, "message": "Estancia no encontrada"})
-    if estancia['fecha_salida']:
-        return jsonify({"success": False, "message": "La estancia ya tiene salida registrada"})
-
-    estancia['fecha_salida'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    monto = calcular_monto(estancia)
-
-    # Create payment automatically
-    data = request.json or {}
-    pago = {
-        "id_pago": next_ids["pago"],
-        "id_estancia": id_estancia,
-        "id_pension": None,
-        "monto": monto,
-        "fecha_pago": estancia['fecha_salida'],
-        "metodo_pago": data.get("metodo_pago", "EFECTIVO"),
-        "referencia": data.get("referencia", None),
-        "observaciones": None,
-    }
-    next_ids["pago"] += 1
-    pagos_db.append(pago)
-
-    duracion = calcular_estancia_str(estancia)
-    return jsonify({"success": True, "message": f"Salida registrada — Duración: {duracion} — Total: ${monto:.2f}", "data": {"estancia": estancia, "pago": pago}})
-
+def api_registrar_salida(folio_servicio):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Obtenemos los datos del servicio para saber a qué hora entró
+        cursor.execute("""
+            SELECT s.*, p.precio 
+            FROM Servicios s 
+            JOIN Precios p ON s.folio_precio = p.folio_precio 
+            WHERE s.folio_servicio = %s AND s.fecha_salida IS NULL
+        """, (folio_servicio,))
+        servicio = cursor.fetchone()
+        
+        if not servicio:
+            return jsonify({"success": False, "message": "Servicio no encontrado o ya tiene salida."})
+            
+        # 2. Calculamos la fecha y hora de salida
+        ahora = datetime.now()
+        fecha_sal = ahora.strftime("%Y-%m-%d")
+        hora_sal = ahora.strftime("%H:%M:%S")
+        
+        str_entrada = f"{servicio['fecha_entrada']} {servicio['hora_entrada']}"
+        dt_entrada = datetime.strptime(str_entrada, "%Y-%m-%d %H:%M:%S")
+        
+        tiempo_estancia = ahora - dt_entrada
+        minutos_totales = int(tiempo_estancia.total_seconds() / 60)
+        
+        # Redondeamos las horas hacia arriba (ej: 65 mins = 2 horas)
+        horas_cobrables = math.ceil(minutos_totales / 60)
+        if horas_cobrables == 0:
+            horas_cobrables = 1 # Cobro mínimo de 1 hora
+            
+        # --- LÓGICA DE COBRO MATEMÁTICA ---
+        # Si tienes una regla específica (ej. después de 5 horas cambia el precio), modifícalo aquí.
+        precio_base = float(servicio['precio'])
+        monto_total = horas_cobrables * precio_base
+        
+        # Formateamos el tiempo de estancia como lo pide la BD (HH:MM:SS)
+        horas_str = str(minutos_totales // 60).zfill(2)
+        minutos_str = str(minutos_totales % 60).zfill(2)
+        tiempo_formateado = f"{horas_str}:{minutos_str}:00"
+        
+        # 3. Actualizamos el servicio poniendo la salida
+        cursor.execute("""
+            UPDATE Servicios 
+            SET fecha_salida = %s, hora_salida = %s 
+            WHERE folio_servicio = %s
+        """, (fecha_sal, hora_sal, folio_servicio))
+        
+        # 4. Insertamos el ticket en la tabla Cobros
+        usuario_id = session['user']['usuario_id']
+        cursor.execute("""
+            INSERT INTO Cobros (folio_servicio, matricula, hora_estancia, usuario_id, monto_total) 
+            VALUES (%s, %s, %s, %s, %s)
+        """, (folio_servicio, servicio['matricula'], tiempo_formateado, usuario_id, monto_total))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True, 
+            "message": f"Salida exitosa. Tiempo: {horas_str}h {minutos_str}m. Total a cobrar: ${monto_total:.2f}"
+        })
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 # ============================================================
 # CRUD API — PENSIONES
@@ -419,43 +605,78 @@ def api_registrar_salida(id_estancia):
 @login_required
 def api_crear_pension():
     data = request.json
-    nueva = {
-        "id_pension": next_ids["pension"],
-        "id_cliente": int(data.get("id_cliente", 0)),
-        "fecha_inicio": data.get("fecha_inicio", ""),
-        "fecha_fin": data.get("fecha_fin", ""),
-        "costo_mensual": float(data.get("costo_mensual", 2500.00)),
-        "estado": "ACTIVA",
-        "observaciones": data.get("observaciones", None) or None,
-    }
-    next_ids["pension"] += 1
-    pensiones_db.append(nueva)
-    return jsonify({"success": True, "message": "Pensión registrada correctamente", "data": nueva})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Insertamos la pensión. (Asumiendo columnas: cliente_id, fecha_inicio, fecha_fin, monto, estado)
+        query = """INSERT INTO Pensiones (cliente_id, fecha_inicio, fecha_fin, monto, estado) 
+                   VALUES (%s, %s, %s, %s, %s)"""
+        valores = (
+            data.get("cliente_id"),
+            data.get("fecha_inicio"),
+            data.get("fecha_fin"),
+            float(data.get("costo_mensual", 0.0)),
+            "ACTIVA"
+        )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Pensión registrada correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
-@app.route('/api/pensiones/<int:id_pension>', methods=['PUT'])
+@app.route('/api/pensiones/<int:pension_id>', methods=['PUT'])
 @login_required
-def api_editar_pension(id_pension):
+def api_editar_pension(pension_id):
     data = request.json
-    pension = get_pension(id_pension)
-    if not pension:
-        return jsonify({"success": False, "message": "Pensión no encontrada"})
-    pension['fecha_inicio'] = data.get('fecha_inicio', pension['fecha_inicio'])
-    pension['fecha_fin'] = data.get('fecha_fin', pension['fecha_fin'])
-    pension['costo_mensual'] = float(data.get('costo_mensual', pension['costo_mensual']))
-    pension['estado'] = data.get('estado', pension['estado'])
-    pension['observaciones'] = data.get('observaciones', pension['observaciones'])
-    return jsonify({"success": True, "message": "Pensión actualizada correctamente"})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        query = """UPDATE Pensiones 
+                   SET fecha_inicio=%s, fecha_fin=%s, monto=%s, estado=%s 
+                   WHERE pension_id=%s"""
+        valores = (
+            data.get("fecha_inicio"),
+            data.get("fecha_fin"),
+            float(data.get("costo_mensual", 0.0)),
+            data.get("estado", "ACTIVA"),
+            pension_id
+        )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Pensión actualizada correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
-
-@app.route('/api/pensiones/<int:id_pension>', methods=['DELETE'])
+@app.route('/api/pensiones/<int:pension_id>', methods=['DELETE'])
 @login_required
-def api_eliminar_pension(id_pension):
-    pension = get_pension(id_pension)
-    if pension:
-        pension['estado'] = 'CANCELADA'
-    return jsonify({"success": True, "message": "Pensión cancelada correctamente"})
-
+def api_eliminar_pension(pension_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # En lugar de borrar el registro (para no perder el historial), es mejor cambiar el estado a CANCELADA
+        cursor.execute("UPDATE Pensiones SET estado='CANCELADA' WHERE pension_id=%s", (pension_id,))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Pensión cancelada correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 # ============================================================
 # CRUD API — TARIFAS
@@ -465,33 +686,53 @@ def api_eliminar_pension(id_pension):
 @login_required
 def api_crear_tarifa():
     data = request.json
-    nueva = {
-        "id_tarifa": next_ids["tarifa"],
-        "descripcion": data.get("descripcion", ""),
-        "tiempo_inicial_min": int(data.get("tiempo_inicial_min", 60)),
-        "costo_inicial": float(data.get("costo_inicial", 20.00)),
-        "costo_por_min_extra": float(data.get("costo_por_min_extra", 0.25)),
-        "estado": "ACTIVA",
-        "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    next_ids["tarifa"] += 1
-    tarifas_db.append(nueva)
-    return jsonify({"success": True, "message": "Tarifa creada correctamente", "data": nueva})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Insertamos el nuevo precio/tarifa
+        query = "INSERT INTO Precios (tipo, precio) VALUES (%s, %s)"
+        # Extraemos 'tipo' y 'precio' (si en tu JS viejo usabas 'descripcion' y 'costo_inicial', adáptalo aquí)
+        valores = (
+            data.get("tipo", "cajon"), 
+            float(data.get("precio", 0.0))
+        )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Tarifa creada correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
-@app.route('/api/tarifas/<int:id_tarifa>', methods=['PUT'])
+@app.route('/api/tarifas/<int:folio_precio>', methods=['PUT'])
 @login_required
-def api_editar_tarifa(id_tarifa):
+def api_editar_tarifa(folio_precio):
     data = request.json
-    tarifa = get_tarifa(id_tarifa)
-    if not tarifa:
-        return jsonify({"success": False, "message": "Tarifa no encontrada"})
-    tarifa['descripcion'] = data.get('descripcion', tarifa['descripcion'])
-    tarifa['tiempo_inicial_min'] = int(data.get('tiempo_inicial_min', tarifa['tiempo_inicial_min']))
-    tarifa['costo_inicial'] = float(data.get('costo_inicial', tarifa['costo_inicial']))
-    tarifa['costo_por_min_extra'] = float(data.get('costo_por_min_extra', tarifa['costo_por_min_extra']))
-    tarifa['estado'] = data.get('estado', tarifa['estado'])
-    return jsonify({"success": True, "message": "Tarifa actualizada correctamente"})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        query = "UPDATE Precios SET tipo=%s, precio=%s WHERE folio_precio=%s"
+        valores = (
+            data.get("tipo"), 
+            float(data.get("precio", 0.0)), 
+            folio_precio
+        )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Tarifa actualizada correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
 # ============================================================
@@ -502,43 +743,98 @@ def api_editar_tarifa(id_tarifa):
 @admin_required
 def api_crear_usuario():
     data = request.json
-    nuevo = {
-        "id_usuario": next_ids["usuario"],
-        "nombre": data.get("nombre", ""),
-        "email": data.get("email", ""),
-        "username": data.get("username", ""),
-        "password": data.get("password", ""),
-        "perfil": data.get("perfil", "cobrador"),
-    }
-    next_ids["usuario"] += 1
-    usuarios_db.append(nuevo)
-    return jsonify({"success": True, "message": "Usuario creado correctamente", "data": nuevo})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        query = """INSERT INTO Usuarios (nombre, email, username, password, perfil) 
+                   VALUES (%s, %s, %s, %s, %s)"""
+                   
+        valores = (
+            data.get("nombre", ""),
+            data.get("email", ""),
+            data.get("username", ""),
+            data.get("password", ""), # En un proyecto real, aquí deberías aplicar un "hash" a la contraseña
+            data.get("perfil", "cobrador")
+        )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Usuario creado correctamente"})
+        
+    except mysql.connector.Error as err:
+        if err.errno == 1062: # Error de MySQL cuando un dato "UNIQUE" ya existe
+            return jsonify({"success": False, "message": "Error: El nombre de usuario (username) ya existe."})
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
-@app.route('/api/usuarios/<int:id_usuario>', methods=['PUT'])
+@app.route('/api/usuarios/<int:usuario_id>', methods=['PUT'])
 @admin_required
-def api_editar_usuario(id_usuario):
+def api_editar_usuario(usuario_id):
     data = request.json
-    user = next((u for u in usuarios_db if u['id_usuario'] == id_usuario), None)
-    if not user:
-        return jsonify({"success": False, "message": "Usuario no encontrado"})
-    user['nombre'] = data.get('nombre', user['nombre'])
-    user['email'] = data.get('email', user['email'])
-    user['username'] = data.get('username', user['username'])
-    if data.get('password'):
-        user['password'] = data['password']
-    user['perfil'] = data.get('perfil', user['perfil'])
-    return jsonify({"success": True, "message": "Usuario actualizado correctamente"})
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Si el administrador escribió algo en la contraseña, la actualizamos. Si no, se queda la que ya tenía.
+        if data.get("password"):
+            query = """UPDATE Usuarios 
+                       SET nombre=%s, email=%s, username=%s, password=%s, perfil=%s 
+                       WHERE usuario_id=%s"""
+            valores = (
+                data.get("nombre"),
+                data.get("email"),
+                data.get("username"),
+                data.get("password"),
+                data.get("perfil"),
+                usuario_id
+            )
+        else:
+            query = """UPDATE Usuarios 
+                       SET nombre=%s, email=%s, username=%s, perfil=%s 
+                       WHERE usuario_id=%s"""
+            valores = (
+                data.get("nombre"),
+                data.get("email"),
+                data.get("username"),
+                data.get("perfil"),
+                usuario_id
+            )
+        
+        cursor.execute(query, valores)
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Usuario actualizado correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
-@app.route('/api/usuarios/<int:id_usuario>', methods=['DELETE'])
+@app.route('/api/usuarios/<int:usuario_id>', methods=['DELETE'])
 @admin_required
-def api_eliminar_usuario(id_usuario):
-    global usuarios_db
-    if id_usuario == session.get('user', {}).get('id_usuario'):
-        return jsonify({"success": False, "message": "No puedes eliminar tu propio usuario"})
-    usuarios_db = [u for u in usuarios_db if u['id_usuario'] != id_usuario]
-    return jsonify({"success": True, "message": "Usuario eliminado correctamente"})
+def api_eliminar_usuario(usuario_id):
+    # Regla de seguridad: Un usuario no puede borrarse a sí mismo si está en sesión
+    if usuario_id == session.get('user', {}).get('usuario_id'):
+        return jsonify({"success": False, "message": "No puedes eliminar tu propia cuenta mientras estás conectado."})
+        
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("DELETE FROM Usuarios WHERE usuario_id=%s", (usuario_id,))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Usuario eliminado correctamente"})
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": "No se puede eliminar: el usuario ya tiene cobros o registros asociados en la base de datos."})
 
 
 # ============================================================
@@ -548,11 +844,45 @@ def api_eliminar_usuario(id_usuario):
 @app.route('/api/stats')
 @login_required
 def api_stats():
-    return jsonify({
-        "vehiculos_dentro": len([e for e in estancias_db if not e['fecha_salida']]),
-        "total_clientes": len([c for c in clientes_db if c['estado'] == 'ACTIVO']),
-        "pensiones_activas": len([p for p in pensiones_db if p['estado'] == 'ACTIVA']),
-    })
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # 1. Vehículos dentro
+        cursor.execute("SELECT COUNT(*) as count FROM Servicios WHERE hora_salida IS NULL")
+        vehiculos_dentro = cursor.fetchone()['count']
+        
+        # 2. Total de clientes registrados
+        cursor.execute("SELECT COUNT(*) as count FROM Clientes")
+        total_clientes = cursor.fetchone()['count']
+        
+        # 3. Pensiones Activas
+        cursor.execute("SELECT COUNT(*) as count FROM Pensiones WHERE estado = 'ACTIVA'")
+        pensiones_activas = cursor.fetchone()['count']
+        
+        # 4. Ingresos del día de hoy
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        cursor.execute("""
+            SELECT SUM(monto_total) as total 
+            FROM Cobros c
+            JOIN Servicios s ON c.folio_servicio = s.folio_servicio
+            WHERE s.fecha_salida = %s
+        """, (hoy,))
+        ingresos_hoy = cursor.fetchone()['total'] or 0.0
+
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "vehiculos_dentro": vehiculos_dentro,
+            "total_clientes": total_clientes,
+            "pensiones_activas": pensiones_activas,
+            "ingresos_hoy": float(ingresos_hoy)
+        })
+        
+    except mysql.connector.Error as err:
+        return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
 # ============================================================

@@ -24,14 +24,14 @@
     <div class="stat-card-header">
       <div class="stat-card-icon">💰</div>
     </div>
-    <div class="stat-card-value">$<span data-count="{{ stats.ingresos_mes|int }}">0</span></div>
-    <div class="stat-card-label">Ingresos del mes</div>
+    <div class="stat-card-value">$<span data-count="{{ stats.get('ingresos_hoy', 0)|int }}">0</span></div>
+    <div class="stat-card-label">Ingresos de hoy</div>
   </div>
   <div class="stat-card amber">
     <div class="stat-card-header">
       <div class="stat-card-icon">📋</div>
     </div>
-    <div class="stat-card-value" data-count="{{ stats.pensiones_activas }}">0</div>
+    <div class="stat-card-value" data-count="0" id="stat-pensiones">0</div>
     <div class="stat-card-label">Pensiones activas</div>
   </div>
 </div>
@@ -71,16 +71,21 @@
       {% if estancias_activas %}
       <div class="table-container">
         <table class="data-table">
-          <thead><tr><th>Placa</th><th>Entrada</th><th>Tarifa</th><th>Tiempo</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Placa</th>
+              <th>Entrada</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
           <tbody>
             {% for e in estancias_activas %}
-            {% set v = get_vehiculo(e.id_vehiculo) %}
-            {% set t = get_tarifa(e.id_tarifa) %}
             <tr>
-              <td class="table-cell-mono">{{ v.placa if v else 'N/A' }}</td>
-              <td>{{ e.fecha_entrada }}</td>
-              <td><span class="badge badge-info">{{ t.descripcion if t else '—' }}</span></td>
-              <td class="table-cell-primary">{{ calcular_estancia(e) }}</td>
+              <td class="table-cell-mono">{{ e.matricula }}</td>
+              <td>{{ e.fecha_entrada }} <br><small class="text-muted">{{ e.hora_entrada }}</small></td>
+              <td><span class="badge badge-info">{{ e.tipo | capitalize }}</span></td>
+              <td class="table-cell-primary">En curso</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -98,24 +103,28 @@
 
   <div class="content-card">
     <div class="content-card-header">
-      <h2 class="content-card-title"><span class="card-icon">💲</span> Ejemplo de Tarifa</h2>
+      <h2 class="content-card-title"><span class="card-icon">💲</span> Tarifas Vigentes</h2>
     </div>
     <div class="content-card-body">
       <div class="price-info" style="grid-template-columns:1fr;">
-        {% for t in tarifas if t.estado == 'ACTIVA' %}
         <div class="price-card">
-          <div class="price-card-title">{{ t.descripcion }}</div>
-          <div class="price-card-amount">${{ "%.2f"|format(t.costo_inicial) }}</div>
-          <div class="price-card-unit">por los primeros {{ t.tiempo_inicial_min }} min</div>
-          <div class="price-card-note">Después: ${{ "%.2f"|format(t.costo_por_min_extra) }} por minuto extra</div>
+          <div class="price-card-title">Normal</div>
+          <div class="price-card-amount">$20.00</div>
+          <div class="price-card-unit">Por hora o fracción</div>
+          <div class="price-card-note">Tarifa estándar para visitantes</div>
         </div>
-        {% endfor %}
+        <div class="price-card mt-2">
+          <div class="price-card-title">Pensión</div>
+          <div class="price-card-amount">$1,500.00</div>
+          <div class="price-card-unit">Mensual</div>
+          <div class="price-card-note">Acceso 24/7 para clientes registrados</div>
+        </div>
       </div>
       <div class="price-card mt-2" style="text-align:left; background:rgba(0,212,170,0.05); border-color:rgba(0,212,170,0.2);">
         <div class="price-card-title">📐 Ejemplo de cálculo</div>
         <div class="text-secondary" style="font-size:0.85rem;">
-          Estancia de <strong>90 min</strong> con Tarifa Estándar:<br>
-          $20.00 + (30 min × $0.25) = <strong style="color:var(--accent-primary);">$27.50</strong>
+          Estancia de <strong>2 horas y 15 min</strong> con Tarifa Normal:<br>
+          Se cobran 3 horas (cada fracción cuenta como hora) = <strong style="color:var(--accent-primary);">$60.00</strong>
         </div>
       </div>
     </div>

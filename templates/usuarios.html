@@ -11,12 +11,12 @@
   </div>
   <div class="stat-card purple">
     <div class="stat-card-header"><div class="stat-card-icon">🔑</div></div>
-    <div class="stat-card-value" data-count="{{ usuarios|selectattr('perfil','equalto','admin')|list|length }}">0</div>
+    <div class="stat-card-value" data-count="{{ usuarios|selectattr('perfil', 'defined')|selectattr('perfil','equalto','admin')|list|length }}">0</div>
     <div class="stat-card-label">Administradores</div>
   </div>
   <div class="stat-card amber">
     <div class="stat-card-header"><div class="stat-card-icon">💼</div></div>
-    <div class="stat-card-value" data-count="{{ usuarios|selectattr('perfil','equalto','cobrador')|list|length }}">0</div>
+    <div class="stat-card-value" data-count="{{ usuarios|selectattr('perfil', 'defined')|selectattr('perfil','equalto','cobrador')|list|length }}">0</div>
     <div class="stat-card-label">Cobradores</div>
   </div>
 </div>
@@ -36,23 +36,28 @@
         <tbody>
           {% for u in usuarios %}
           <tr>
-            <td class="table-cell-mono">{{ u.id_usuario }}</td>
+            <td class="table-cell-mono">{{ u.id or u.id_usuario }}</td>
             <td class="table-cell-primary">
               <div class="d-flex align-center gap-1">
-                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;">{{ u.nombre[0] }}</div>
-                {{ u.nombre }}
+                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;">{{ u.nombre[0] if u.nombre else '?' }}</div>
+                {{ u.nombre or 'Sin nombre' }}
               </div>
             </td>
-            <td>{{ u.email }}</td>
-            <td class="table-cell-mono">{{ u.username }}</td>
+            <td>{{ u.email or 'Sin email' }}</td>
+            <td class="table-cell-mono">{{ u.username or 'N/A' }}</td>
             <td>
-              {% if u.perfil == 'admin' %}<span class="badge badge-purple">🔑 Admin</span>
-              {% else %}<span class="badge badge-info">💼 Cobrador</span>{% endif %}
+              {% if u.perfil == 'admin' %}
+                <span class="badge badge-purple">🔑 Admin</span>
+              {% else %}
+                <span class="badge badge-info">💼 Cobrador</span>
+              {% endif %}
             </td>
             <td>
               <div class="d-flex gap-1">
-                <button class="btn btn-ghost btn-sm" onclick="abrirEditarUsuario({{ u.id_usuario }},'{{ u.nombre }}','{{ u.email }}','{{ u.username }}','{{ u.perfil }}')">✏️</button>
-                <button class="btn btn-danger btn-sm" onclick="eliminarUsuario({{ u.id_usuario }},'{{ u.nombre }}')">🗑️</button>
+                <button class="btn btn-ghost btn-sm" title="Editar"
+                  onclick="abrirEditarUsuario('{{ u.id or u.id_usuario }}', '{{ u.nombre or "" }}', '{{ u.email or "" }}', '{{ u.username or "" }}', '{{ u.perfil or "" }}')">✏️</button>
+                <button class="btn btn-danger btn-sm" title="Eliminar"
+                  onclick="eliminarUsuario('{{ u.id or u.id_usuario }}', '{{ u.nombre or "" }}')">🗑️</button>
               </div>
             </td>
           </tr>
@@ -63,7 +68,6 @@
   </div>
 </div>
 
-<!-- MODAL: Crear Usuario -->
 <div class="modal-overlay" id="modal-crear-usuario">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">Nuevo Usuario</h3><button class="modal-close">✕</button></div>
@@ -90,7 +94,6 @@
   </div>
 </div>
 
-<!-- MODAL: Editar Usuario -->
 <div class="modal-overlay" id="modal-editar-usuario">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">Editar Usuario</h3><button class="modal-close">✕</button></div>

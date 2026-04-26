@@ -8,7 +8,7 @@
 </div>
 
 <div class="tabs">
-  <button class="tab-item active" data-tab="tab-activos">🟢 Activos ({{ estancias|selectattr('fecha_salida','none')|list|length }})</button>
+  <button class="tab-item active" data-tab="tab-activos">🟢 Activos <span id="badge-activos">(0)</span></button>
   <button class="tab-item" data-tab="tab-historial">📜 Historial</button>
 </div>
 
@@ -16,29 +16,22 @@
   <div class="content-card">
     <div class="content-card-header">
       <h2 class="content-card-title"><span class="card-icon">🚗</span> Vehículos en Estacionamiento</h2>
-      <input type="text" placeholder="Buscar placa..." class="form-input-no-icon" style="width:200px;padding:0.5rem 1rem;font-size:0.85rem;" data-search-table="estancias-activas-table">
+      <input type="text" placeholder="Buscar placa..." class="form-input-no-icon" style="width:200px;padding:0.5rem 1rem;font-size:0.85rem;" data-search-table="tbody-estancias-activas">
     </div>
     <div class="content-card-body" style="padding:0;">
       <div class="table-container">
-        <table class="data-table" id="estancias-activas-table">
-          <thead><tr><th>ID</th><th>Placa</th><th>Entrada</th><th>Tarifa</th><th>Tiempo</th><th>Pensión</th><th>Monto Est.</th><th>Acción</th></tr></thead>
-          <tbody>
-            {% for e in estancias if not e.fecha_salida %}
-            {% set v = get_vehiculo(e.id_vehiculo) %}
-            {% set t = get_tarifa(e.id_tarifa) %}
+        <table class="data-table">
+          <thead>
             <tr>
-              <td class="table-cell-mono">{{ e.id_estancia }}</td>
-              <td><span class="table-cell-mono" style="font-size:1rem;background:rgba(0,212,170,0.1);padding:4px 10px;border-radius:6px;">{{ v.placa if v else 'N/A' }}</span></td>
-              <td>{{ e.fecha_entrada }}</td>
-              <td><span class="badge badge-info">{{ t.descripcion if t else '—' }}</span></td>
-              <td class="table-cell-primary">{{ calcular_estancia(e) }}</td>
-              <td>{% if e.es_pension %}<span class="badge badge-purple">📋 Sí</span>{% else %}<span class="badge badge-warning">No</span>{% endif %}</td>
-              <td class="table-cell-primary" style="font-weight:700;">${{ "%.2f"|format(calcular_monto(e)) }}</td>
-              <td>
-                <button class="btn btn-primary btn-sm" onclick="confirmarSalida({{ e.id_estancia }},'{{ v.placa if v else 'N/A' }}')">🏁 Salida</button>
-              </td>
+              <th>ID</th>
+              <th>Placa</th>
+              <th>Entrada</th>
+              <th>Tipo Tarifa</th>
+              <th>Acción</th>
             </tr>
-            {% endfor %}
+          </thead>
+          <tbody id="tbody-estancias-activas">
+            <tr><td colspan="5" style="text-align:center;">Cargando estancias...</td></tr>
           </tbody>
         </table>
       </div>
@@ -54,28 +47,18 @@
     <div class="content-card-body" style="padding:0;">
       <div class="table-container">
         <table class="data-table">
-          <thead><tr><th>ID</th><th>Placa</th><th>Entrada</th><th>Salida</th><th>Duración</th><th>Tarifa</th><th>Monto</th><th>Estado</th></tr></thead>
-          <tbody>
-            {% for e in estancias %}
-            {% set v = get_vehiculo(e.id_vehiculo) %}
-            {% set t = get_tarifa(e.id_tarifa) %}
+          <thead>
             <tr>
-              <td class="table-cell-mono">{{ e.id_estancia }}</td>
-              <td class="table-cell-mono">{{ v.placa if v else 'N/A' }}</td>
-              <td>{{ e.fecha_entrada }}</td>
-              <td>{{ e.fecha_salida or '—' }}</td>
-              <td class="table-cell-primary">{{ calcular_estancia(e) }}</td>
-              <td><span class="badge badge-info">{{ t.descripcion if t else '—' }}</span></td>
-              <td>${{ "%.2f"|format(calcular_monto(e)) }}</td>
-              <td>
-                {% if e.fecha_salida %}
-                  <span class="badge badge-purple">✅ Completada</span>
-                {% else %}
-                  <span class="badge badge-success"><span class="status-dot online"></span> Activa</span>
-                {% endif %}
-              </td>
+              <th>ID</th>
+              <th>Placa</th>
+              <th>Entrada</th>
+              <th>Salida</th>
+              <th>Tarifa</th>
+              <th>Estado</th>
             </tr>
-            {% endfor %}
+          </thead>
+          <tbody id="tbody-estancias-historial">
+            <tr><td colspan="6" style="text-align:center;">Cargando historial...</td></tr>
           </tbody>
         </table>
       </div>
@@ -83,35 +66,21 @@
   </div>
 </div>
 
-<!-- MODAL: Registrar Entrada -->
 <div class="modal-overlay" id="modal-entrada">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">🚗 Registrar Entrada</h3><button class="modal-close">✕</button></div>
     <div class="modal-body">
       <form id="form-entrada">
         <div class="form-group">
-          <label class="form-label">Vehículo</label>
-          <select name="id_vehiculo" class="form-select" required>
-            <option value="">Seleccionar vehículo...</option>
-            {% for v in vehiculos %}
-            {% set cli = get_cliente(v.id_cliente) %}
-            <option value="{{ v.id_vehiculo }}">{{ v.placa }} — {{ v.marca }} {{ v.modelo }} ({{ cli.nombre if cli else 'Sin cliente' }})</option>
-            {% endfor %}
-          </select>
+          <label class="form-label">Matrícula (Placa)</label>
+          <input type="text" id="entrada-matricula" name="matricula" class="form-input-no-icon" placeholder="Ej. ABC-123" required style="text-transform: uppercase;">
         </div>
         <div class="form-group">
-          <label class="form-label">Tarifa</label>
-          <select name="id_tarifa" class="form-select" required>
-            {% for t in tarifas %}
-            <option value="{{ t.id_tarifa }}">{{ t.descripcion }} — ${{ "%.2f"|format(t.costo_inicial) }} / {{ t.tiempo_inicial_min }} min</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">¿Es pensión?</label>
-          <select name="es_pension" class="form-select">
-            <option value="false">No</option>
-            <option value="true">Sí — Pensión</option>
+          <label class="form-label">Tipo de Vehículo / Tarifa</label>
+          <select id="entrada-tipo" name="tipo" class="form-select" required>
+            <option value="auto">Auto Normal</option>
+            <option value="camioneta">Camioneta / SUV</option>
+            <option value="moto">Motocicleta</option>
           </select>
         </div>
       </form>
@@ -123,34 +92,32 @@
   </div>
 </div>
 
-<!-- MODAL: Confirmar Salida -->
 <div class="modal-overlay" id="modal-salida">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">🏁 Registrar Salida</h3><button class="modal-close">✕</button></div>
     <div class="modal-body">
       <input type="hidden" id="salida-id">
       <div class="price-card mb-2" style="text-align:center;">
-        <div class="price-card-title">Vehículo</div>
-        <div class="price-card-amount" id="salida-placa" style="font-size:1.5rem;"></div>
+        <div class="price-card-title">Vehículo a salir</div>
+        <div class="price-card-amount" id="salida-placa" style="font-size:1.5rem; letter-spacing: 2px;"></div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Método de Pago</label>
-        <select id="salida-metodo" class="form-select">
-          <option value="EFECTIVO">💵 Efectivo</option>
-          <option value="TARJETA">💳 Tarjeta</option>
-          <option value="TRANSFERENCIA">🏦 Transferencia</option>
-          <option value="OTRO">📝 Otro</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Referencia (opcional)</label>
-        <input type="text" id="salida-referencia" class="form-input-no-icon" placeholder="Ej: TXN-00123">
-      </div>
+      <p style="text-align:center; color: var(--text-secondary); margin-bottom: 1rem;">
+        Al confirmar, se registrará la hora de salida y se calculará el total a pagar según las horas transcurridas.
+      </p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" data-modal-close>Cancelar</button>
-      <button class="btn btn-primary" onclick="procesarSalida()">Confirmar Salida y Cobrar</button>
+      <button class="btn btn-primary" onclick="procesarSalida()">Confirmar y Generar Cobro</button>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Aquí inicializamos la carga de datos específicos de esta página
+  document.addEventListener('DOMContentLoaded', () => {
+    cargarEstancias();
+  });
+</script>
 {% endblock %}

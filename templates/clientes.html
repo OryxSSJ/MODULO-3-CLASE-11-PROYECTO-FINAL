@@ -12,12 +12,12 @@
   </div>
   <div class="stat-card purple">
     <div class="stat-card-header"><div class="stat-card-icon">⭐</div></div>
-    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente','equalto','REGISTRADO')|list|length }}">0</div>
+    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente', 'defined')|selectattr('tipo_cliente','equalto','REGISTRADO')|list|length }}">0</div>
     <div class="stat-card-label">Registrados</div>
   </div>
   <div class="stat-card amber">
     <div class="stat-card-header"><div class="stat-card-icon">🚶</div></div>
-    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente','equalto','OCASIONAL')|list|length }}">0</div>
+    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente', 'defined')|selectattr('tipo_cliente','equalto','OCASIONAL')|list|length }}">0</div>
     <div class="stat-card-label">Ocasionales</div>
   </div>
 </div>
@@ -39,14 +39,16 @@
         <tbody>
           {% for c in clientes %}
           <tr>
-            <td class="table-cell-mono">{{ c.id_cliente }}</td>
+            <td class="table-cell-mono">{{ c.id | default(c.cliente_id) }}</td>
             <td class="table-cell-primary">
               <div class="d-flex align-center gap-1">
-                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;{{'background:linear-gradient(135deg,#7c3aed,#ec4899);' if c.tipo_cliente=='REGISTRADO' else 'background:linear-gradient(135deg,#64748b,#94a3b8);'}}">{{ c.nombre[0] }}</div>
+                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;{{ 'background:linear-gradient(135deg,#7c3aed,#ec4899);' if c.tipo_cliente == 'REGISTRADO' else 'background:linear-gradient(135deg,#64748b,#94a3b8);' }}">
+                  {{ c.nombre[0] if c.nombre else '?' }}
+                </div>
                 {{ c.nombre }}
               </div>
             </td>
-            <td class="font-mono">{{ c.telefono }}</td>
+            <td class="font-mono">{{ c.telefono | default('N/A', true) }}</td>
             <td>
               {% if c.tipo_cliente == 'REGISTRADO' %}
                 <span class="badge badge-success">⭐ Registrado</span>
@@ -61,16 +63,18 @@
                 <span class="badge badge-danger"><span class="status-dot offline"></span> Inactivo</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ c.fecha_registro[:10] }}</td>
+            <td class="text-muted">{{ (c.fecha_registro | string)[:10] if c.fecha_registro else 'Sin fecha' }}</td>
             <td>
               <div class="d-flex gap-1">
-                <button class="btn btn-ghost btn-sm" title="Ver detalle"
-                  onclick="verCliente({{ c.id_cliente }},'{{ c.nombre }}','{{ c.telefono }}','{{ c.tipo_cliente }}','{{ c.estado }}','{{ c.fecha_registro }}')">👁️</button>
-                <button class="btn btn-ghost btn-sm" title="Editar"
-                  onclick="abrirEditarCliente({{ c.id_cliente }},'{{ c.nombre }}','{{ c.telefono }}','{{ c.tipo_cliente }}','{{ c.estado }}')">✏️</button>
-                <button class="btn btn-danger btn-sm" title="Eliminar"
-                  onclick="eliminarCliente({{ c.id_cliente }},'{{ c.nombre }}')">🗑️</button>
-              </div>
+  <button class="btn btn-ghost btn-sm" title="Ver detalle"
+    onclick="verCliente('{{ c.id or c.id_cliente }}', '{{ c.nombre }}', '{{ c.telefono or "" }}', '{{ c.tipo_cliente }}', '{{ c.estado }}', '{{ (c.fecha_registro | string)[:10] if c.fecha_registro else "" }}')">👁️</button>
+  
+  <button class="btn btn-ghost btn-sm" title="Editar"
+    onclick="abrirEditarCliente('{{ c.id or c.id_cliente }}', '{{ c.nombre }}', '{{ c.telefono or "" }}', '{{ c.tipo_cliente }}', '{{ c.estado }}')">✏️</button>
+  
+  <button class="btn btn-danger btn-sm" title="Eliminar"
+    onclick="eliminarCliente('{{ c.id or c.id_cliente }}', '{{ c.nombre }}')">🗑️</button>
+</div>
             </td>
           </tr>
           {% endfor %}
@@ -80,7 +84,6 @@
   </div>
 </div>
 
-<!-- MODAL: Crear Cliente -->
 <div class="modal-overlay" id="modal-crear-cliente">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">Nuevo Cliente</h3><button class="modal-close">✕</button></div>
@@ -112,7 +115,6 @@
   </div>
 </div>
 
-<!-- MODAL: Editar Cliente -->
 <div class="modal-overlay" id="modal-editar-cliente">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">Editar Cliente</h3><button class="modal-close">✕</button></div>
@@ -150,7 +152,6 @@
   </div>
 </div>
 
-<!-- MODAL: Ver Cliente -->
 <div class="modal-overlay" id="modal-ver-cliente">
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">👤 Detalle del Cliente</h3><button class="modal-close">✕</button></div>

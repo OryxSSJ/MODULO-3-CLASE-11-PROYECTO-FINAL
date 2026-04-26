@@ -188,18 +188,16 @@ function initSearch() {
     if (!table) return;
     input.addEventListener('input', () => {
       const query = input.value.toLowerCase();
-      table.querySelectorAll('tbody tr').forEach(row => {
+      table.querySelectorAll('tr').forEach(row => {
         row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
       });
     });
   });
 }
 
-
 /* ============================================================
    GENERIC CRUD HELPERS
    ============================================================ */
-
 function apiRequest(url, method, data = null) {
   const options = {
     method: method,
@@ -220,17 +218,121 @@ function reloadAfterDelay(ms = 800) {
   setTimeout(() => location.reload(), ms);
 }
 
+/* ============================================================
+   MÓDULO DE ESTANCIAS (ENTRADA / SALIDA / CARGA DINÁMICA)
+   ============================================================ */
+
+// Cargar estancias dinámicamente al abrir estancias.html
+function cargarEstancias() {
+  const tbodyActivas = document.getElementById('tbody-estancias-activas');
+  const tbodyHistorial = document.getElementById('tbody-estancias-historial');
+  const badgeActivos = document.getElementById('badge-activos');
+  
+  if (!tbodyActivas && !tbodyHistorial) return; // Solo ejecutar si estamos en la vista de estancias
+
+  apiRequest('/api/estancias', 'GET')
+    .then(data => {
+      // Filtrar y limpiar tablas
+      const activas = data.filter(e => e.estado === 'ACTIVO');
+      const completadas = data.filter(e => e.estado === 'COMPLETADO');
+      
+      if(badgeActivos) badgeActivos.textContent = `(${activas.length})`;
+
+      // Renderizar Activas
+      if (tbodyActivas) {
+        tbodyActivas.innerHTML = '';
+        if (activas.length === 0) {
+          tbodyActivas.innerHTML = '<tr><td colspan="5" style="text-align:center;">No hay vehículos actualmente</td></tr>';
+        } else {
+          activas.forEach(e => {
+            tbodyActivas.innerHTML += `
+              <tr>
+                <td class="table-cell-mono">${e.id}</td>
+                <td><span class="table-cell-mono" style="font-size:1rem;background:rgba(0,212,170,0.1);padding:4px 10px;border-radius:6px;">${e.matricula}</span></td>
+                <td>${e.fecha_entrada} <br><small class="text-muted">${e.hora_entrada}</small></td>
+                <td><span class="badge badge-info">${e.tipo}</span></td>
+                <td>
+                  <button class="btn btn-primary btn-sm" onclick="confirmarSalida(${e.id}, '${e.matricula}')">🏁 Salida</button>
+                </td>
+              </tr>
+            `;
+          });
+        }
+      }
+
+      // Renderizar Historial
+      if (tbodyHistorial) {
+        tbodyHistorial.innerHTML = '';
+        if (completadas.length === 0) {
+          tbodyHistorial.innerHTML = '<tr><td colspan="6" style="text-align:center;">No hay registros en el historial</td></tr>';
+        } else {
+          completadas.forEach(e => {
+            tbodyHistorial.innerHTML += `
+              <tr>
+                <td class="table-cell-mono">${e.id}</td>
+                <td class="table-cell-mono">${e.matricula}</td>
+                <td>${e.fecha_entrada} <br><small class="text-muted">${e.hora_entrada}</small></td>
+                <td>${e.fecha_salida || '—'} <br><small class="text-muted">${e.hora_salida || ''}</small></td>
+                <td><span class="badge badge-info">${e.tipo}</span></td>
+                <td><span class="badge badge-purple">✅ Completada ($${e.total || '0.00'})</span></td>
+              </tr>
+            `;
+          });
+        }
+      }
+    })
+    .catch(err => console.error("Error al cargar estancias:", err));
+}
+
+function registrarEntrada() {
+  const data = getFormData('form-entrada');
+  if (!data.matricula) return showToast('La matrícula es requerida', 'error');
+  
+  // Convertimos a mayúsculas por consistencia
+  data.matricula = data.matricula.toUpperCase();
+
+  apiRequest('/api/estancias', 'POST', data).then(r => {
+    if (r.id || r.message) { 
+      showToast('Entrada registrada correctamente'); 
+      closeModal('modal-entrada'); 
+      reloadAfterDelay(); 
+    } else { 
+      showToast(r.error || 'Error al registrar', 'error'); 
+    }
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
+
+function confirmarSalida(idEstancia, matricula) {
+  document.getElementById('salida-id').value = idEstancia;
+  document.getElementById('salida-placa').textContent = matricula;
+  openModal('modal-salida');
+}
+
+function procesarSalida() {
+  const id = document.getElementById('salida-id').value;
+  
+  apiRequest(`/api/estancias/${id}/salida`, 'POST', {}).then(r => {
+    if (r.message || r.total) { 
+      // Si la API devuelve el total, lo mostramos
+      const total = r.total !== undefined ? r.total : 'calculado';
+      showToast(`Salida registrada. Total a cobrar: $${total}`); 
+      closeModal('modal-salida'); 
+      reloadAfterDelay(1500); // Damos un poco más de tiempo para que lean el total
+    } else { 
+      showToast(r.error || 'Error al procesar salida', 'error'); 
+    }
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
 
 /* ============================================================
    CLIENTES CRUD
    ============================================================ */
-
 function crearCliente() {
   const data = getFormData('form-crear-cliente');
   if (!data.nombre) return showToast('El nombre es requerido', 'error');
   apiRequest('/api/clientes', 'POST', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-crear-cliente'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); closeModal('modal-crear-cliente'); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al crear', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
@@ -252,16 +354,16 @@ function guardarEditarCliente() {
     estado: document.getElementById('edit-cliente-estado').value,
   };
   apiRequest(`/api/clientes/${id}`, 'PUT', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-editar-cliente'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); closeModal('modal-editar-cliente'); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al actualizar', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
 function eliminarCliente(id, nombre) {
   if (!confirm(`¿Eliminar al cliente "${nombre}"?`)) return;
   apiRequest(`/api/clientes/${id}`, 'DELETE').then(r => {
-    if (r.success) { showToast(r.message); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al eliminar', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
@@ -276,186 +378,53 @@ function verCliente(id, nombre, telefono, tipo, estado, fecha) {
 }
 
 /* ============================================================
-   VEHICULOS CRUD
+   TARIFAS CRUD (Actualizado a BD MySQL nueva)
    ============================================================ */
-
-function crearVehiculo() {
-  const data = getFormData('form-crear-vehiculo');
-  if (!data.placa) return showToast('La placa es requerida', 'error');
-  apiRequest('/api/vehiculos', 'POST', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-crear-vehiculo'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-function abrirEditarVehiculo(id, placa, marca, modelo, color, clienteId) {
-  document.getElementById('edit-vehiculo-id').value = id;
-  document.getElementById('edit-vehiculo-placa').value = placa;
-  document.getElementById('edit-vehiculo-marca').value = marca;
-  document.getElementById('edit-vehiculo-modelo').value = modelo;
-  document.getElementById('edit-vehiculo-color').value = color;
-  document.getElementById('edit-vehiculo-cliente').value = clienteId;
-  openModal('modal-editar-vehiculo');
-}
-
-function guardarEditarVehiculo() {
-  const id = document.getElementById('edit-vehiculo-id').value;
-  const data = {
-    placa: document.getElementById('edit-vehiculo-placa').value,
-    marca: document.getElementById('edit-vehiculo-marca').value,
-    modelo: document.getElementById('edit-vehiculo-modelo').value,
-    color: document.getElementById('edit-vehiculo-color').value,
-    id_cliente: document.getElementById('edit-vehiculo-cliente').value,
-  };
-  apiRequest(`/api/vehiculos/${id}`, 'PUT', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-editar-vehiculo'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-function eliminarVehiculo(id, placa) {
-  if (!confirm(`¿Eliminar el vehículo con placa "${placa}"?`)) return;
-  apiRequest(`/api/vehiculos/${id}`, 'DELETE').then(r => {
-    if (r.success) { showToast(r.message); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-/* ============================================================
-   ESTANCIAS (ENTRADA / SALIDA)
-   ============================================================ */
-
-function registrarEntrada() {
-  const data = getFormData('form-entrada');
-  if (!data.id_vehiculo) return showToast('Selecciona un vehículo', 'error');
-  data.es_pension = data.es_pension === 'true';
-  apiRequest('/api/estancias', 'POST', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-entrada'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-function registrarSalida(idEstancia) {
-  const metodo = document.getElementById(`metodo-pago-${idEstancia}`);
-  const data = { metodo_pago: metodo ? metodo.value : 'EFECTIVO' };
-  apiRequest(`/api/estancias/${idEstancia}/salida`, 'POST', data).then(r => {
-    if (r.success) { showToast(r.message); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-function confirmarSalida(idEstancia, placa) {
-  document.getElementById('salida-id').value = idEstancia;
-  document.getElementById('salida-placa').textContent = placa;
-  openModal('modal-salida');
-}
-
-function procesarSalida() {
-  const id = document.getElementById('salida-id').value;
-  const metodo = document.getElementById('salida-metodo').value;
-  const ref = document.getElementById('salida-referencia').value;
-  apiRequest(`/api/estancias/${id}/salida`, 'POST', { metodo_pago: metodo, referencia: ref || null }).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-salida'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-/* ============================================================
-   PENSIONES CRUD
-   ============================================================ */
-
-function crearPension() {
-  const data = getFormData('form-crear-pension');
-  if (!data.id_cliente) return showToast('Selecciona un cliente', 'error');
-  apiRequest('/api/pensiones', 'POST', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-crear-pension'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-function abrirEditarPension(id, clienteId, inicio, fin, costo, estado, obs) {
-  document.getElementById('edit-pension-id').value = id;
-  document.getElementById('edit-pension-cliente').value = clienteId;
-  document.getElementById('edit-pension-inicio').value = inicio;
-  document.getElementById('edit-pension-fin').value = fin;
-  document.getElementById('edit-pension-costo').value = costo;
-  document.getElementById('edit-pension-estado').value = estado;
-  document.getElementById('edit-pension-obs').value = obs || '';
-  openModal('modal-editar-pension');
-}
-
-function guardarEditarPension() {
-  const id = document.getElementById('edit-pension-id').value;
-  const data = {
-    id_cliente: document.getElementById('edit-pension-cliente').value,
-    fecha_inicio: document.getElementById('edit-pension-inicio').value,
-    fecha_fin: document.getElementById('edit-pension-fin').value,
-    costo_mensual: document.getElementById('edit-pension-costo').value,
-    estado: document.getElementById('edit-pension-estado').value,
-    observaciones: document.getElementById('edit-pension-obs').value || null,
-  };
-  apiRequest(`/api/pensiones/${id}`, 'PUT', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-editar-pension'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-function cancelarPension(id) {
-  if (!confirm('¿Cancelar esta pensión?')) return;
-  apiRequest(`/api/pensiones/${id}`, 'DELETE').then(r => {
-    if (r.success) { showToast(r.message); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
-  }).catch(() => showToast('Error de conexión', 'error'));
-}
-
-/* ============================================================
-   TARIFAS
-   ============================================================ */
-
 function crearTarifa() {
   const data = getFormData('form-crear-tarifa');
-  if (!data.descripcion) return showToast('La descripción es requerida', 'error');
+  if (!data.tipo || !data.precio) return showToast('Tipo y precio son requeridos', 'error');
   apiRequest('/api/tarifas', 'POST', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-crear-tarifa'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); closeModal('modal-crear-tarifa'); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al crear', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
-function abrirEditarTarifa(id, desc, tiempo, costo, costoExtra, estado) {
+function abrirEditarTarifa(id, tipo, precio) {
   document.getElementById('edit-tarifa-id').value = id;
-  document.getElementById('edit-tarifa-desc').value = desc;
-  document.getElementById('edit-tarifa-tiempo').value = tiempo;
-  document.getElementById('edit-tarifa-costo').value = costo;
-  document.getElementById('edit-tarifa-extra').value = costoExtra;
-  document.getElementById('edit-tarifa-estado').value = estado;
+  document.getElementById('edit-tarifa-tipo').value = tipo;
+  document.getElementById('edit-tarifa-precio').value = precio;
   openModal('modal-editar-tarifa');
 }
 
 function guardarEditarTarifa() {
   const id = document.getElementById('edit-tarifa-id').value;
   const data = {
-    descripcion: document.getElementById('edit-tarifa-desc').value,
-    tiempo_inicial_min: document.getElementById('edit-tarifa-tiempo').value,
-    costo_inicial: document.getElementById('edit-tarifa-costo').value,
-    costo_por_min_extra: document.getElementById('edit-tarifa-extra').value,
-    estado: document.getElementById('edit-tarifa-estado').value,
+    tipo: document.getElementById('edit-tarifa-tipo').value,
+    precio: parseFloat(document.getElementById('edit-tarifa-precio').value),
   };
   apiRequest(`/api/tarifas/${id}`, 'PUT', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-editar-tarifa'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); closeModal('modal-editar-tarifa'); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al actualizar', 'error');
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
+
+function eliminarTarifa(id, tipo) {
+  if (!confirm(`¿Eliminar la tarifa "${tipo}"?`)) return;
+  apiRequest(`/api/tarifas/${id}`, 'DELETE').then(r => {
+    if (r.message && !r.error) { showToast(r.message); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al eliminar', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
 /* ============================================================
    USUARIOS CRUD
    ============================================================ */
-
 function crearUsuario() {
   const data = getFormData('form-crear-usuario');
   if (!data.nombre || !data.username || !data.password) return showToast('Completa todos los campos', 'error');
   apiRequest('/api/usuarios', 'POST', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-crear-usuario'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); closeModal('modal-crear-usuario'); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al crear', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
@@ -475,18 +444,70 @@ function guardarEditarUsuario() {
     email: document.getElementById('edit-usuario-email').value,
     username: document.getElementById('edit-usuario-username').value,
     perfil: document.getElementById('edit-usuario-perfil').value,
-    password: document.getElementById('edit-usuario-password').value || null,
   };
+  const pwd = document.getElementById('edit-usuario-password').value;
+  if (pwd) data.password = pwd; // Solo envía password si se escribió algo
+
   apiRequest(`/api/usuarios/${id}`, 'PUT', data).then(r => {
-    if (r.success) { showToast(r.message); closeModal('modal-editar-usuario'); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); closeModal('modal-editar-usuario'); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al actualizar', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
 function eliminarUsuario(id, nombre) {
   if (!confirm(`¿Eliminar al usuario "${nombre}"?`)) return;
   apiRequest(`/api/usuarios/${id}`, 'DELETE').then(r => {
-    if (r.success) { showToast(r.message); reloadAfterDelay(); }
-    else showToast(r.message, 'error');
+    if (r.message && !r.error) { showToast(r.message); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al eliminar', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
+}
+
+function crearVehiculo(event) {
+    event.preventDefault();
+
+    const placa = document.getElementById('placa').value.trim();
+    const marca = document.getElementById('marca').value.trim();
+    const modelo = document.getElementById('modelo').value.trim();
+    const color = document.getElementById('color').value;
+    const cliente_id = document.getElementById('id_cliente').value;
+
+    console.log({ placa, marca, modelo, color, cliente_id });
+
+    if (!placa || !marca || !modelo || !color) {
+        alert("Por favor, llena los campos obligatorios.");
+        return;
+    }
+
+    if(!cliente_id){
+      alert("Selecciona un cliente")
+      return;
+    }
+    const datos = {
+        placa,
+        marca,
+        modelo,
+        color,
+        cliente_id
+    };
+
+    fetch('/api/vehiculos/crear', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(datos)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success || data.mensaje) {
+            alert("Vehículo registrado correctamente");
+            location.reload();
+        } else {
+            alert("Hubo un problema: " + (data.error || "Error desconocido"));
+        }
+    })
+    .catch(error => {
+        console.error("Error de conexión:", error);
+        alert("Error de conexión con el servidor.");
+    });
 }
