@@ -31,7 +31,17 @@
             </tr>
           </thead>
           <tbody id="tbody-estancias-activas">
-            <tr><td colspan="5" style="text-align:center;">Cargando estancias...</td></tr>
+            {% for e in estancias if not e.fecha_salida %}
+            <tr>
+              <td class="table-cell-mono">{{ e.folio_servicio }}</td>
+              <td><span class="table-cell-mono" style="font-size:1rem;background:rgba(0,212,170,0.1);padding:4px 10px;border-radius:6px;">{{ e.matricula }}</span></td>
+              <td>{{ e.fecha_entrada }} {{ e.hora_entrada }}</td>
+              <td>{{ e.nombre_tarifa or 'Cajón' }}</td>
+              <td><button class="btn btn-primary btn-sm" onclick="prepararSalida({{ e.folio_servicio }}, '{{ e.matricula }}')">🏁 Salida</button></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" style="text-align:center;">No hay vehículos actualmente en el estacionamiento</td></tr>
+            {% endfor %}
           </tbody>
         </table>
       </div>
@@ -58,7 +68,18 @@
             </tr>
           </thead>
           <tbody id="tbody-estancias-historial">
-            <tr><td colspan="6" style="text-align:center;">Cargando historial...</td></tr>
+            {% for e in estancias if e.fecha_salida %}
+            <tr>
+              <td class="table-cell-mono">{{ e.folio_servicio }}</td>
+              <td><span class="table-cell-mono" style="font-size:1rem;background:rgba(0,212,170,0.1);padding:4px 10px;border-radius:6px;">{{ e.matricula }}</span></td>
+              <td>{{ e.fecha_entrada }} {{ e.hora_entrada }}</td>
+              <td>{{ e.fecha_salida }} {{ e.hora_salida }}</td>
+              <td>{{ e.nombre_tarifa or 'Cajón' }}</td>
+              <td><span class="badge badge-success">COMPLETADO</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;">No hay historial disponible</td></tr>
+            {% endfor %}
           </tbody>
         </table>
       </div>

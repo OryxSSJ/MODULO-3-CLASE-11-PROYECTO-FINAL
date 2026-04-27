@@ -31,10 +31,9 @@
           <thead><tr><th>ID</th><th>Placa</th><th>Marca</th><th>Modelo</th><th>Color</th><th>Cliente</th><th>Acciones</th></tr></thead>
           <tbody>
             {% for v in vehiculos %}
-            {% set cli = get_cliente(v.id_cliente) if v.id_cliente else None %}
             <tr>
-              <td class="table-cell-mono">{{ v.id or v.id_vehiculo }}</td>
-              <td><span class="table-cell-mono" style="font-size:1rem;background:rgba(0,212,170,0.1);padding:4px 10px;border-radius:6px;">{{ v.placa }}</span></td>
+              <td class="table-cell-mono">{{ v.matricula }}</td>
+              <td><span class="table-cell-mono" style="font-size:1rem;background:rgba(0,212,170,0.1);padding:4px 10px;border-radius:6px;">{{ v.matricula }}</span></td>
               <td class="table-cell-primary">{{ v.marca }}</td>
               <td>{{ v.modelo }}</td>
               <td>
@@ -45,14 +44,14 @@
                   {{ v.color }}
                 </div>
               </td>
-              <td>{{ cli.nombre if cli else 'Sin asignar' }}</td>
+              <td>{{ v.nombre_cliente if v.cliente_id else 'Sin asignar' }}</td>
               <td>
   <div class="d-flex gap-1">
     <button class="btn btn-ghost btn-sm" title="Editar"
-      onclick='abrirEditarVehiculo({{ v.id|default("", true)|tojson }}, {{ v.placa|default("", true)|tojson }}, {{ v.marca|default("", true)|tojson }}, {{ v.modelo|default("", true)|tojson }}, {{ v.color|default("", true)|tojson }}, {{ v.id_cliente|default("", true)|tojson }})'>✏️</button>
+      onclick='abrirEditarVehiculo({{ v.matricula|default("", true)|tojson }}, {{ v.marca|default("", true)|tojson }}, {{ v.modelo|default("", true)|tojson }}, {{ v.color|default("", true)|tojson }}, {{ v.cliente_id|default("", true)|tojson }})'>✏️</button>
 
     <button class="btn btn-danger btn-sm" title="Eliminar"
-      onclick='eliminarVehiculo({{ v.id|default("", true)|tojson }}, {{ v.placa|default("", true)|tojson }})'>🗑️</button>
+      onclick='eliminarVehiculo({{ v.matricula|default("", true)|tojson }})'>🗑️</button>
   </div>
 </td>
             </tr>
@@ -67,14 +66,13 @@
 <div class="tab-content" id="tab-cards">
   <div class="vehicle-grid">
     {% for v in vehiculos %}
-    {% set cli = get_cliente(v.id_cliente) if v.id_cliente else None %}
     <div class="vehicle-card">
-      <div class="vehicle-card-plate">🚗 {{ v.placa }}</div>
+      <div class="vehicle-card-plate">🚗 {{ v.matricula }}</div>
       <div class="vehicle-card-details">
         <div class="vehicle-card-detail"><span class="detail-label">Marca:</span><span class="table-cell-primary">{{ v.marca }}</span></div>
         <div class="vehicle-card-detail"><span class="detail-label">Modelo:</span><span>{{ v.modelo }}</span></div>
         <div class="vehicle-card-detail"><span class="detail-label">Color:</span><span>{{ v.color }}</span></div>
-        <div class="vehicle-card-detail"><span class="detail-label">Cliente:</span><span>{{ cli.nombre if cli else 'Sin asignar' }}</span></div>
+        <div class="vehicle-card-detail"><span class="detail-label">Cliente:</span><span>{{ v.nombre_cliente if v.cliente_id else 'Sin asignar' }}</span></div>
       </div>
     </div>
     {% endfor %}
@@ -86,50 +84,48 @@
     <div class="modal-header"><h3 class="modal-title">Nuevo Vehículo</h3><button class="modal-close">✕</button></div>
     <div class="modal-body">
       <form id="form-crear-vehiculo">
-    <div class="form-group">
-        <label class="form-label">Placa</label>
-        <input type="text" id="placa" name="placa" class="form-input-no-icon"
-       placeholder="CHH-123-A" required maxlength="20"
-       style="text-transform:uppercase;font-family:var(--font-mono);font-size:1.1rem;letter-spacing:0.1em;">
-    </div>
-    
-    <div class="grid-form-row">
         <div class="form-group">
-            <label class="form-label">Marca</label>
-            <input type="text" id="marca" name="marca" class="form-input-no-icon" placeholder="Toyota" required>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Modelo</label>
-            <input type="text" id="modelo" name="modelo" class="form-input-no-icon" placeholder="Corolla 2024" required>
-        </div>
-    </div>
-    
-    <div class="grid-form-row">
-        <div class="form-group">
-            <label class="form-label">Color</label>
-            <select id="color" name="color" class="form-select" required>
-                <option value="Blanco">⬜ Blanco</option>
-                <option value="Negro">⬛ Negro</option>
-                <option value="Gris">🔲 Gris</option>
-                <option value="Rojo">🟥 Rojo</option>
-                <option value="Azul">🟦 Azul</option>
-                <option value="Otro">🔳 Otro</option>
-            </select>
+          <label class="form-label">Matrícula</label>
+          <input type="text" name="matricula" id="matricula" class="form-input-no-icon" placeholder="Ej: JAL-123" required style="text-transform:uppercase;">
         </div>
         
-        <div class="form-group">
-            <label class="form-label">Cliente</label>
-           <select id="id_cliente" name="cliente_id" class="form-select" required>
-    <option value="">Seleccionar...</option>
-    {% for c in clientes %}
-        <option value="{{ c.id_cliente if c.id_cliente is defined else c.id }}">
-            {{ c.nombre if c.nombre is defined else c.nombre_cliente }}
-        </option>
-    {% endfor %}
-</select>
+        <div class="grid-form-row">
+            <div class="form-group">
+                <label class="form-label">Marca</label>
+                <input type="text" id="marca" name="marca" class="form-input-no-icon" placeholder="Toyota" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Modelo</label>
+                <input type="text" id="modelo" name="modelo" class="form-input-no-icon" placeholder="Corolla 2024" required>
+            </div>
         </div>
-    </div>
-</form>
+        
+        <div class="grid-form-row">
+            <div class="form-group">
+                <label class="form-label">Color</label>
+                <select id="color" name="color" class="form-select" required>
+                    <option value="Blanco">⬜ Blanco</option>
+                    <option value="Negro">⬛ Negro</option>
+                    <option value="Gris">🔲 Gris</option>
+                    <option value="Rojo">🟥 Rojo</option>
+                    <option value="Azul">🟦 Azul</option>
+                    <option value="Otro">🔳 Otro</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Cliente</label>
+               <select id="cliente_id" name="cliente_id" class="form-select" required>
+        <option value="">Seleccionar...</option>
+        {% for c in clientes %}
+            <option value="{{ c.cliente_id }}">
+                {{ c.nombre }}
+            </option>
+        {% endfor %}
+    </select>
+            </div>
+        </div>
+    </form>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" data-modal-close>Cancelar</button>
@@ -142,8 +138,10 @@
   <div class="modal">
     <div class="modal-header"><h3 class="modal-title">Editar Vehículo</h3><button class="modal-close">✕</button></div>
     <div class="modal-body">
-      <input type="hidden" id="edit-vehiculo-id">
-      <div class="form-group"><label class="form-label">Placa</label><input type="text" id="edit-vehiculo-placa" class="form-input-no-icon" style="text-transform:uppercase;font-family:var(--font-mono);"></div>
+      <div class="form-group">
+        <label class="form-label">Matrícula</label>
+        <input type="text" id="edit-vehiculo-matricula" class="form-input-no-icon" disabled>
+      </div>
       <div class="grid-form-row">
         <div class="form-group"><label class="form-label">Marca</label><input type="text" id="edit-vehiculo-marca" class="form-input-no-icon"></div>
         <div class="form-group"><label class="form-label">Modelo</label><input type="text" id="edit-vehiculo-modelo" class="form-input-no-icon"></div>
@@ -151,18 +149,21 @@
       <div class="grid-form-row">
         <div class="form-group">
           <label class="form-label">Color</label>
-          <select id="edit-vehiculo-color" class="form-select">
-            <option value="Blanco">Blanco</option><option value="Negro">Negro</option><option value="Gris">Gris</option>
-            <option value="Rojo">Rojo</option><option value="Azul">Azul</option><option value="Otro">Otro</option>
+          <select name="color" id="edit-vehiculo-color" class="form-select" required>
+            <option value="Blanco">Blanco</option>
+            <option value="Negro">Negro</option>
+            <option value="Plata">Plata</option>
+            <option value="Gris">Gris</option>
+            <option value="Rojo">Rojo</option>
+            <option value="Azul">Azul</option>
+            <option value="Otro">Otro</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Cliente</label>
-          <select id="edit-vehiculo-cliente" class="form-select">
-            <option value="">Sin cliente (Ocasional)</option>
-            {% for c in clientes %}
-              <option value="{{ c.id or c.id_cliente }}">{{ c.nombre }}</option>
-            {% endfor %}
+          <label class="form-label">Cliente (Opcional si es eventual)</label>
+          <select name="cliente_id" id="edit-vehiculo-cliente" class="form-select">
+            <option value="">Ninguno (Ocasional)</option>
+            {% for c in clientes if c.estado == 'activo' %}<option value="{{ c.cliente_id }}">{{ c.nombre }}</option>{% endfor %}
           </select>
         </div>
       </div>

@@ -12,12 +12,12 @@
   </div>
   <div class="stat-card purple">
     <div class="stat-card-header"><div class="stat-card-icon">⭐</div></div>
-    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente', 'defined')|selectattr('tipo_cliente','equalto','REGISTRADO')|list|length }}">0</div>
+    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo', 'defined')|selectattr('tipo','equalto','registrado')|list|length }}">0</div>
     <div class="stat-card-label">Registrados</div>
   </div>
   <div class="stat-card amber">
     <div class="stat-card-header"><div class="stat-card-icon">🚶</div></div>
-    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo_cliente', 'defined')|selectattr('tipo_cliente','equalto','OCASIONAL')|list|length }}">0</div>
+    <div class="stat-card-value" data-count="{{ clientes|selectattr('tipo', 'defined')|selectattr('tipo','equalto','ocasional')|list|length }}">0</div>
     <div class="stat-card-label">Ocasionales</div>
   </div>
 </div>
@@ -39,10 +39,10 @@
         <tbody>
           {% for c in clientes %}
           <tr>
-            <td class="table-cell-mono">{{ c.id | default(c.cliente_id) }}</td>
+            <td class="table-cell-mono">{{ c.cliente_id }}</td>
             <td class="table-cell-primary">
               <div class="d-flex align-center gap-1">
-                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;{{ 'background:linear-gradient(135deg,#7c3aed,#ec4899);' if c.tipo_cliente == 'REGISTRADO' else 'background:linear-gradient(135deg,#64748b,#94a3b8);' }}">
+                <div class="sidebar-user-avatar" style="width:32px;height:32px;font-size:0.75rem;{{ 'background:linear-gradient(135deg,#7c3aed,#ec4899);' if c.tipo == 'registrado' else 'background:linear-gradient(135deg,#64748b,#94a3b8);' }}">
                   {{ c.nombre[0] if c.nombre else '?' }}
                 </div>
                 {{ c.nombre }}
@@ -50,14 +50,14 @@
             </td>
             <td class="font-mono">{{ c.telefono | default('N/A', true) }}</td>
             <td>
-              {% if c.tipo_cliente == 'REGISTRADO' %}
+              {% if c.tipo == 'registrado' %}
                 <span class="badge badge-success">⭐ Registrado</span>
               {% else %}
                 <span class="badge badge-warning">🚶 Ocasional</span>
               {% endif %}
             </td>
             <td>
-              {% if c.estado == 'ACTIVO' %}
+              {% if c.estado == 'activo' %}
                 <span class="badge badge-success"><span class="status-dot online"></span> Activo</span>
               {% else %}
                 <span class="badge badge-danger"><span class="status-dot offline"></span> Inactivo</span>
@@ -67,13 +67,13 @@
             <td>
               <div class="d-flex gap-1">
   <button class="btn btn-ghost btn-sm" title="Ver detalle"
-    onclick="verCliente('{{ c.id or c.id_cliente }}', '{{ c.nombre }}', '{{ c.telefono or "" }}', '{{ c.tipo_cliente }}', '{{ c.estado }}', '{{ (c.fecha_registro | string)[:10] if c.fecha_registro else "" }}')">👁️</button>
+    onclick="verCliente('{{ c.cliente_id }}', '{{ c.nombre }}', '{{ c.telefono or "" }}', '{{ c.tipo }}', '{{ c.estado }}', '{{ (c.fecha_registro | string)[:10] if c.fecha_registro else "" }}')">👁️</button>
   
   <button class="btn btn-ghost btn-sm" title="Editar"
-    onclick="abrirEditarCliente('{{ c.id or c.id_cliente }}', '{{ c.nombre }}', '{{ c.telefono or "" }}', '{{ c.tipo_cliente }}', '{{ c.estado }}')">✏️</button>
+    onclick="abrirEditarCliente('{{ c.cliente_id }}', '{{ c.nombre }}', '{{ c.telefono or "" }}', '{{ c.tipo }}', '{{ c.estado }}')">✏️</button>
   
   <button class="btn btn-danger btn-sm" title="Eliminar"
-    onclick="eliminarCliente('{{ c.id or c.id_cliente }}', '{{ c.nombre }}')">🗑️</button>
+    onclick="eliminarCliente('{{ c.cliente_id }}', '{{ c.nombre }}')">🗑️</button>
 </div>
             </td>
           </tr>
@@ -100,9 +100,9 @@
           </div>
           <div class="form-group">
             <label class="form-label">Tipo de cliente</label>
-            <select name="tipo_cliente" class="form-select" required>
-              <option value="OCASIONAL">🚶 Ocasional</option>
-              <option value="REGISTRADO">⭐ Registrado</option>
+            <select name="tipo" class="form-select" required>
+              <option value="ocasional">🚶 Ocasional</option>
+              <option value="registrado" selected>⭐ Registrado</option>
             </select>
           </div>
         </div>
@@ -131,17 +131,17 @@
         </div>
         <div class="form-group">
           <label class="form-label">Tipo</label>
-          <select id="edit-cliente-tipo" class="form-select">
-            <option value="OCASIONAL">Ocasional</option>
-            <option value="REGISTRADO">Registrado</option>
+          <select id="edit-cliente-tipo" name="tipo" class="form-select">
+            <option value="ocasional">Ocasional</option>
+            <option value="registrado">Registrado</option>
           </select>
         </div>
       </div>
       <div class="form-group">
         <label class="form-label">Estado</label>
-        <select id="edit-cliente-estado" class="form-select">
-          <option value="ACTIVO">Activo</option>
-          <option value="INACTIVO">Inactivo</option>
+        <select id="edit-cliente-estado" name="estado" class="form-select">
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
         </select>
       </div>
     </div>

@@ -10,28 +10,28 @@
       <div class="stat-card-icon">🚗</div>
       <span class="stat-card-trend up">En vivo</span>
     </div>
-    <div class="stat-card-value" data-count="{{ stats.vehiculos_dentro }}">0</div>
+    <div class="stat-card-value" data-count="{{ global_stats.vehiculos_dentro if global_stats else 0 }}">0</div>
     <div class="stat-card-label">Vehículos dentro</div>
   </div>
   <div class="stat-card purple">
     <div class="stat-card-header">
       <div class="stat-card-icon">👥</div>
     </div>
-    <div class="stat-card-value" data-count="{{ stats.total_clientes }}">0</div>
+    <div class="stat-card-value" data-count="{{ global_stats.total_clientes if global_stats else 0 }}">0</div>
     <div class="stat-card-label">Clientes activos</div>
   </div>
   <div class="stat-card pink">
     <div class="stat-card-header">
       <div class="stat-card-icon">💰</div>
     </div>
-    <div class="stat-card-value">$<span data-count="{{ stats.get('ingresos_hoy', 0)|int }}">0</span></div>
+    <div class="stat-card-value">$<span data-count="{{ global_stats.ingresos_hoy if global_stats else 0 | int }}">0</span></div>
     <div class="stat-card-label">Ingresos de hoy</div>
   </div>
   <div class="stat-card amber">
     <div class="stat-card-header">
       <div class="stat-card-icon">📋</div>
     </div>
-    <div class="stat-card-value" data-count="0" id="stat-pensiones">0</div>
+    <div class="stat-card-value" data-count="{{ global_stats.pensiones_activas if global_stats else 0 }}" id="stat-pensiones">0</div>
     <div class="stat-card-label">Pensiones activas</div>
   </div>
 </div>

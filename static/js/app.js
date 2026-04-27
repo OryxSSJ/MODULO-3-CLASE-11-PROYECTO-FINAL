@@ -463,51 +463,92 @@ function eliminarUsuario(id, nombre) {
 }
 
 function crearVehiculo(event) {
-    event.preventDefault();
+  if (event) event.preventDefault();
+  const data = getFormData('form-crear-vehiculo');
+  if (!data.matricula || !data.marca || !data.modelo || !data.color) return showToast('Llena los campos obligatorios', 'error');
+  
+  apiRequest('/api/vehiculos/crear', 'POST', data).then(r => {
+    if (r.success || r.mensaje) { showToast(r.mensaje || 'Vehículo registrado correctamente'); closeModal('modal-crear-vehiculo'); reloadAfterDelay(); }
+    else showToast(r.error || 'Error al crear', 'error');
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
 
-    const placa = document.getElementById('placa').value.trim();
-    const marca = document.getElementById('marca').value.trim();
-    const modelo = document.getElementById('modelo').value.trim();
-    const color = document.getElementById('color').value;
-    const cliente_id = document.getElementById('id_cliente').value;
+function abrirEditarVehiculo(matricula, marca, modelo, color, cliente_id) {
+  document.getElementById('edit-vehiculo-matricula').value = matricula;
+  document.getElementById('edit-vehiculo-marca').value = marca;
+  document.getElementById('edit-vehiculo-modelo').value = modelo;
+  document.getElementById('edit-vehiculo-color').value = color;
+  document.getElementById('edit-vehiculo-cliente').value = cliente_id || "";
+  openModal('modal-editar-vehiculo');
+}
 
-    console.log({ placa, marca, modelo, color, cliente_id });
+function guardarEditarVehiculo() {
+  const matricula = document.getElementById('edit-vehiculo-matricula').value;
+  const data = {
+    marca: document.getElementById('edit-vehiculo-marca').value,
+    modelo: document.getElementById('edit-vehiculo-modelo').value,
+    color: document.getElementById('edit-vehiculo-color').value,
+    cliente_id: document.getElementById('edit-vehiculo-cliente').value,
+  };
+  apiRequest(`/api/vehiculos/${matricula}`, 'PUT', data).then(r => {
+    if (r.success || r.message) { showToast(r.message || 'Vehículo actualizado'); closeModal('modal-editar-vehiculo'); reloadAfterDelay(); }
+    else showToast(r.error || r.message || 'Error al actualizar', 'error');
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
 
-    if (!placa || !marca || !modelo || !color) {
-        alert("Por favor, llena los campos obligatorios.");
-        return;
-    }
+function eliminarVehiculo(matricula) {
+  if (!confirm(`¿Eliminar el vehículo con matrícula "${matricula}"?`)) return;
+  apiRequest(`/api/vehiculos/${matricula}`, 'DELETE').then(r => {
+    if (r.success || r.message) { showToast(r.message || 'Vehículo eliminado'); reloadAfterDelay(); }
+    else showToast(r.error || r.message || 'Error al eliminar', 'error');
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
 
-    if(!cliente_id){
-      alert("Selecciona un cliente")
-      return;
-    }
-    const datos = {
-        placa,
-        marca,
-        modelo,
-        color,
-        cliente_id
-    };
+/* ============================================================
+   PENSIONES CRUD
+   ============================================================ */
+function crearPension() {
+  const data = getFormData('form-crear-pension');
+  if (!data.cliente_id || !data.matricula || !data.fecha_inicio || !data.fecha_fin || !data.monto) {
+    return showToast('Completa todos los campos obligatorios', 'error');
+  }
+  apiRequest('/api/pensiones', 'POST', data).then(r => {
+    if (r.success || r.message) { showToast(r.message || 'Pensión registrada'); closeModal('modal-crear-pension'); reloadAfterDelay(); }
+    else showToast(r.error || r.message || 'Error al crear pensión', 'error');
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
 
-    fetch('/api/vehiculos/crear', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(datos)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success || data.mensaje) {
-            alert("Vehículo registrado correctamente");
-            location.reload();
-        } else {
-            alert("Hubo un problema: " + (data.error || "Error desconocido"));
-        }
-    })
-    .catch(error => {
-        console.error("Error de conexión:", error);
-        alert("Error de conexión con el servidor.");
-    });
+function abrirEditarPension(id_pension, cliente_id, matricula, inicio, fin, monto, estatus) {
+  document.getElementById('edit-pension-id').value = id_pension;
+  document.getElementById('edit-pension-cliente').value = cliente_id || "";
+  document.getElementById('edit-pension-matricula').value = matricula || "";
+  document.getElementById('edit-pension-inicio').value = inicio;
+  document.getElementById('edit-pension-fin').value = fin;
+  document.getElementById('edit-pension-monto').value = monto;
+  document.getElementById('edit-pension-estatus').value = estatus;
+  openModal('modal-editar-pension');
+}
+
+function guardarEditarPension() {
+  const id_pension = document.getElementById('edit-pension-id').value;
+  const data = {
+    cliente_id: document.getElementById('edit-pension-cliente').value,
+    matricula: document.getElementById('edit-pension-matricula').value,
+    fecha_inicio: document.getElementById('edit-pension-inicio').value,
+    fecha_fin: document.getElementById('edit-pension-fin').value,
+    monto: document.getElementById('edit-pension-monto').value,
+    estatus: document.getElementById('edit-pension-estatus').value,
+  };
+  apiRequest(`/api/pensiones/${id_pension}`, 'PUT', data).then(r => {
+    if (r.success || r.message) { showToast(r.message || 'Pensión actualizada'); closeModal('modal-editar-pension'); reloadAfterDelay(); }
+    else showToast(r.error || r.message || 'Error al actualizar', 'error');
+  }).catch(() => showToast('Error de conexión', 'error'));
+}
+
+function cancelarPension(id_pension) {
+  if (!confirm('¿Seguro que deseas cancelar esta pensión?')) return;
+  apiRequest(`/api/pensiones/${id_pension}`, 'DELETE').then(r => {
+    if (r.success || r.message) { showToast(r.message || 'Pensión cancelada'); reloadAfterDelay(); }
+    else showToast(r.error || r.message || 'Error al cancelar', 'error');
+  }).catch(() => showToast('Error de conexión', 'error'));
 }

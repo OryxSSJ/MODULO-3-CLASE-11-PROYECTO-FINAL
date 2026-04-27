@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, g
 from functools import wraps
 import mysql.connector
 from datetime import datetime, timedelta
@@ -20,9 +21,18 @@ DB_CONFIG ={
 # ============================================================
 # AUTH DECORATORS
 # ============================================================
-def get_db_connection():
-    """Establece y retorna la conexion a la base de datos"""
-    return mysql.connector.connect(**DB_CONFIG)
+def get_db():
+    """Establece y retorna la conexion a la base de datos de forma global y segura"""
+    if 'db' not in g:
+        g.db = mysql.connector.connect(**DB_CONFIG)
+    return g.db
+
+@app.teardown_appcontext
+def close_db(error):
+    """Asegura que la conexion se cierre al terminar la peticion, evitando leaks"""
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
 
 def login_required(f):
     @wraps(f)
@@ -43,6 +53,53 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# ============================================================
+# CONTEXTO GLOBAL PARA TODAS LAS PLANTILLAS
+# ============================================================
+@app.context_processor
+def inject_global_stats():
+    # Solo ejecutar si el usuario ha iniciado sesión
+    if 'user' not in session:
+        return dict(global_stats={})
+        
+    try:
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True, buffered=True)
+        
+        # 1. Vehículos dentro (estancias activas sin hora de salida)
+        cursor.execute("SELECT COUNT(*) as count FROM Servicios WHERE hora_salida IS NULL")
+        vehiculos_dentro = cursor.fetchone()['count']
+        
+        # 2. Total clientes
+        cursor.execute("SELECT COUNT(*) as count FROM Clientes")
+        total_clientes = cursor.fetchone()['count']
+        
+        # 3. Pensiones activas
+        cursor.execute("SELECT COUNT(*) as count FROM Pensiones WHERE estatus = 'ACTIVA'")
+        pensiones_activas = cursor.fetchone()['count']
+        
+        # 4. Ingresos hoy
+        cursor.execute("""
+            SELECT COALESCE(SUM(monto_total), 0) as total 
+            FROM Cobros 
+            WHERE DATE(fecha_cobro) = CURDATE()
+        """)
+        ingresos_hoy = cursor.fetchone()['total']
+        
+        cursor.close()
+        
+        return dict(global_stats={
+            'vehiculos_dentro': vehiculos_dentro,
+            'total_clientes': total_clientes,
+            'pensiones_activas': pensiones_activas,
+            'ingresos_hoy': float(ingresos_hoy)
+        })
+    except Exception as e:
+        print("Error en context_processor:", e)
+        return dict(global_stats={
+            'vehiculos_dentro': 0, 'total_clientes': 0, 'pensiones_activas': 0, 'ingresos_hoy': 0.0
+        })
+
 
 # ============================================================
 # PAGE ROUTES
@@ -61,15 +118,13 @@ def login():
         username = request.form.get('username', '')
         password = request.form.get('password', '')
         try:
-            conn = get_db_connection()
+            conn = get_db()
             cursor = conn.cursor(dictionary=True) 
             
             # evitar SQL injection
             query = "SELECT * FROM Usuarios WHERE username = %s AND password = %s"
             cursor.execute(query, (username, password))
             user = cursor.fetchone()
-            cursor.close()
-            conn.close()
             if user:
                 session['user'] = user
                 flash('Bienvenido, '+ user['nombre'], 'success')
@@ -92,63 +147,39 @@ def logout():
 @login_required
 def dashboard():
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True, buffered=True)
 
-        #1 vehiculos dentro
-        cursor.execute("SELECT COUNT(*) as vehiculos_dentro FROM Servicios WHERE hora_salida IS NULL")
-        vehiculos_dentro = cursor.fetchone()['vehiculos_dentro']
-        #2 total clientes registrados
-        cursor.execute("SELECT COUNT(*) as total_clientes FROM Clientes")
-        total_clientes = cursor.fetchone()['total_clientes']
-        #3 ingresos dia de hoy
-        hoy = datetime.now().strftime("%Y-%m-%d")
-        # Obtenemos los ingresos del día de hoy
+        # Estancias activas para la tabla del dashboard (LEFT JOIN porque Precios puede estar vacía)
         cursor.execute("""
-            SELECT SUM(monto_total) as ingresos_hoy 
-            FROM cobros 
-            WHERE DATE(fecha_cobro) = CURDATE()
+            SELECT s.folio_servicio, s.matricula, s.fecha_entrada, s.hora_entrada,
+                   COALESCE(p.tipo, 'cajon') as tipo
+            FROM Servicios s
+            LEFT JOIN Precios p ON s.folio_precio = p.folio_precio
+            WHERE s.hora_salida IS NULL
+            ORDER BY s.fecha_entrada DESC, s.hora_entrada DESC
         """)
-        resultado_ingresos = cursor.fetchone()
-        
-        # Si no hay cobros hoy, 'ingresos_hoy' será None. Lo convertimos a 0 de forma segura.
-        ingresos_hoy = 0
-        if resultado_ingresos and resultado_ingresos['ingresos_hoy'] is not None:
-            ingresos_hoy = resultado_ingresos['ingresos_hoy']
-
-        # Mandamos los datos al diccionario stats
-        stats = {
-            'ingresos_hoy': ingresos_hoy,
-            # Aquí dejas las demás variables que ya tenías en tu stats (entradas, salidas, etc)
-        }
-        # servicios activos
-        cursor.execute("""
-        SELECT s.folio_servicio, s.matricula, s.fecha_entrada, s.hora_entrada, p.tipo
-        FROM Servicios s
-        JOIN Precios p ON s.folio_precio = p.folio_precio
-        WHERE s.hora_salida IS NULL""")
         estancias_activas = cursor.fetchall()
-
         cursor.close()
-        conn.close()
-        return render_template('dashboard.html', stats=stats,
-                               estancias_activas = estancias_activas)
+
+        # Las stats del dashboard ahora vienen del context_processor global (global_stats)
+        # No duplicamos queries — todo el sistema lee de la misma fuente de verdad
+        return render_template('dashboard.html', estancias_activas=estancias_activas)
     except mysql.connector.Error as err:
         flash(f'Error de DB: {err}', 'error')
-        return render_template('dashboard.html', stats={}, estancias_activas=[])
+        return render_template('dashboard.html', estancias_activas=[])
 
 
 @app.route('/clientes')
 @login_required
 def clientes():
     try:
-      conn = get_db_connection()
+      conn = get_db()
       cursor = conn.cursor(dictionary=True)
       #Todos los clientes
       cursor.execute("SELECT * FROM Clientes")
       lista_clientes = cursor.fetchall()
-      cursor.close()
-      conn.close()  
+  
       return render_template('clientes.html', clientes = lista_clientes)
     except mysql.connector.Error as err:
         flash(f'Error al cargar clientes: {err}', 'error')
@@ -160,7 +191,7 @@ def clientes():
 @login_required
 def vehiculos():
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         
         # Traemos vehículos haciendo un JOIN con Clientes para mostrar el nombre del dueño
@@ -172,11 +203,9 @@ def vehiculos():
         lista_vehiculos = cursor.fetchall()
         
         # También necesitamos la lista de clientes para el "select/dropdown" al registrar un vehículo
-        cursor.execute("SELECT cliente_id, nombre FROM Clientes")
+        cursor.execute("SELECT cliente_id, nombre, estado FROM Clientes")
         lista_clientes = cursor.fetchall()
         
-        cursor.close()
-        conn.close()
         return render_template('vehiculos.html', vehiculos=lista_vehiculos, clientes=lista_clientes)
     except mysql.connector.Error as err:
         flash(f'Error al cargar vehículos: {err}', 'error')
@@ -187,7 +216,7 @@ def vehiculos():
 @login_required
 def estancias():
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         
         # Traemos todos los servicios, mostrando primero los que no han salido
@@ -207,8 +236,6 @@ def estancias():
         cursor.execute("SELECT folio_precio, tipo, precio FROM Precios WHERE tipo = 'cajon'")
         lista_tarifas = cursor.fetchall()
         
-        cursor.close()
-        conn.close()
         return render_template('estancias.html', estancias=lista_estancias, vehiculos=lista_vehiculos, tarifas=lista_tarifas)
     except mysql.connector.Error as err:
         flash(f'Error al cargar estancias: {err}', 'error')
@@ -220,7 +247,7 @@ def estancias():
 def pagos():
     # La vista de pagos ahora lee de la tabla Cobros
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
             SELECT c.*, s.fecha_salida, u.nombre as cobrador
@@ -230,8 +257,6 @@ def pagos():
             ORDER BY s.fecha_salida DESC, c.hora_estancia DESC
         """)
         lista_cobros = cursor.fetchall()
-        cursor.close()
-        conn.close()
         return render_template('pagos.html', pagos=lista_cobros)
     except mysql.connector.Error as err:
         flash(f'Error al cargar cobros: {err}', 'error')
@@ -241,7 +266,7 @@ def pagos():
 @login_required
 def pensiones():
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         # Traemos las pensiones haciendo JOIN para mostrar el nombre del cliente
         cursor.execute("""
@@ -252,11 +277,9 @@ def pensiones():
         lista_pensiones = cursor.fetchall()
         
         # Para el formulario de "Nueva Pensión" necesitamos la lista de clientes
-        cursor.execute("SELECT cliente_id, nombre FROM Clientes")
+        cursor.execute("SELECT cliente_id, nombre, estado FROM Clientes")
         lista_clientes = cursor.fetchall()
         
-        cursor.close()
-        conn.close()
         return render_template('pensiones.html', pensiones=lista_pensiones, clientes=lista_clientes)
     except mysql.connector.Error as err:
         flash(f'Error al cargar pensiones: {err}', 'error')
@@ -266,13 +289,11 @@ def pensiones():
 @login_required
 def tarifas():
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         # Consultamos la tabla Precios
         cursor.execute("SELECT * FROM Precios")
         lista_precios = cursor.fetchall()
-        cursor.close()
-        conn.close()
         return render_template('tarifas.html', tarifas=lista_precios)
     except mysql.connector.Error as err:
         flash(f'Error al cargar tarifas: {err}', 'error')
@@ -283,13 +304,11 @@ def tarifas():
 @admin_required
 def usuarios():
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         # Traemos todos los usuarios, pero sin la contraseña por seguridad al mostrar en la vista
         cursor.execute("SELECT usuario_id, nombre, email, username, perfil FROM Usuarios")
         lista_usuarios = cursor.fetchall()
-        cursor.close()
-        conn.close()
         return render_template('usuarios.html', usuarios=lista_usuarios)
     except mysql.connector.Error as err:
         flash(f'Error al cargar usuarios: {err}', 'error')
@@ -299,7 +318,7 @@ def usuarios():
 @admin_required
 def reportes():
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         
         # Obtenemos los ingresos agrupados por fecha (últimos 7 días con actividad)
@@ -317,8 +336,6 @@ def reportes():
         # Invertimos la lista para que la gráfica muestre el día más antiguo primero y el más reciente al final
         ingresos_recientes.reverse()
         
-        cursor.close()
-        conn.close()
         
         return render_template('reportes.html', ingresos=ingresos_recientes)
     except mysql.connector.Error as err:
@@ -334,10 +351,10 @@ def reportes():
 def api_crear_cliente():
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
-        query = """INSERT INTO Clientes (nombre, telefono, email, rfc, usuario_id)
-                   VALUES ( %s, %s, %s, %s, %s)"""
+        query = """INSERT INTO Clientes (nombre, telefono, email, rfc, usuario_id, tipo, estado)
+                   VALUES ( %s, %s, %s, %s, %s, %s, %s)"""
         #obetner el id de usuario logeado y registrando al cliente
         usuario_id = session['user']['usuario_id']
         valores = (
@@ -345,12 +362,13 @@ def api_crear_cliente():
             data.get("telefono", ""),
             data.get("email", ""),
             data.get("rfc", ""),
-            usuario_id)
+            usuario_id,
+            data.get("tipo", "registrado"),
+            data.get("estado", "activo")
+        )
         cursor.execute(query, valores)
         conn.commit()
         nuevo_id = cursor.lastrowid
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Cliente registrado correctamente", "id": nuevo_id})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": f"Error de DB: {err}"})
@@ -360,21 +378,21 @@ def api_crear_cliente():
 def api_editar_cliente(id_cliente):
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         query = """UPDATE Clientes
-                   SET nombre=%s, telefono=%s, email=%s, rfc=%s
+                   SET nombre=%s, telefono=%s, email=%s, rfc=%s, tipo=%s, estado=%s
                    WHERE cliente_id=%s"""
         valores = (
             data.get("nombre"),
             data.get("telefono"),
             data.get("email"),
             data.get("rfc"),
+            data.get("tipo", "registrado"),
+            data.get("estado", "activo"),
             id_cliente)
         cursor.execute(query, valores)
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Cliente actualizado correctamente"})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": f"Error de DB: {err}"})
@@ -383,14 +401,12 @@ def api_editar_cliente(id_cliente):
 @login_required
 def api_eliminar_cliente(id_cliente):
     try: 
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
 
         #Eliminar por llave primaria
         cursor.execute("DELETE FROM Clientes WHERE cliente_id=%s", (id_cliente,))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success":True,"message": "Cliente eliminado correctamente"})
     except mysql.connector.Error as err:
         #Si hay vehiculos registrados mysql bloqueara el borrado por llave foranea, hacer un trigger
@@ -413,10 +429,12 @@ def api_crear_vehiculo():
         marca = datos.get('marca')
         modelo = datos.get('modelo')
         color = datos.get('color')
-        id_cliente = datos.get('id_cliente')
+        id_cliente = datos.get('cliente_id')
+        if not id_cliente: # Handle occasional
+            id_cliente = None
 
         # 2. Conectamos a la BD usando tu función estándar
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -425,8 +443,6 @@ def api_crear_vehiculo():
         """, (matricula, marca, modelo, color, id_cliente))
         
         conn.commit()
-        cursor.close()
-        conn.close()
 
         # 3. Respuesta de éxito
         return jsonify({'success': True, 'mensaje': 'Vehículo registrado correctamente'})
@@ -437,51 +453,51 @@ def api_crear_vehiculo():
         print("Error en /api/vehiculos/crear:", e)
         return jsonify({'success': False, 'error': str(e)}), 500
     
-@app.route('/api/vehiculos/<int:matricula>', methods=['PUT'])
+@app.route('/api/vehiculos/<string:matricula>', methods=['PUT'])
 @login_required
 def api_editar_vehiculo(matricula):
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         # No actualizamos la matrícula porque es la llave primaria, solo el resto de los datos
         query = """UPDATE Vehiculos 
                    SET modelo=%s, marca=%s, color=%s, cliente_id=%s 
                    WHERE matricula=%s"""
-                   
+        
+        cliente_id = data.get("cliente_id")
+        if not cliente_id:
+            cliente_id = None
+            
         valores = (
             data.get("modelo"),
             data.get("marca"),
             data.get("color"),
-            data.get("cliente_id"),
+            cliente_id,
             matricula
         )
         
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Vehículo actualizado correctamente"})
         
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": f"Error de BD: {err}"})
 
 
-@app.route('/api/vehiculos/<int:matricula>', methods=['DELETE'])
+@app.route('/api/vehiculos/<string:matricula>', methods=['DELETE'])
 @login_required
 def api_eliminar_vehiculo(matricula):
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         # Eliminamos buscando por la matrícula (string)
         cursor.execute("DELETE FROM Vehiculos WHERE matricula=%s", (matricula,))
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Vehículo eliminado correctamente"})
         
     except mysql.connector.Error as err:
@@ -497,7 +513,7 @@ def api_eliminar_vehiculo(matricula):
 def api_crear_estancia():
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         # Obtenemos fecha y hora actual separadas
@@ -519,8 +535,6 @@ def api_crear_estancia():
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": f"Entrada registrada para el vehículo {valores[0]}"})
         
     except mysql.connector.Error as err:
@@ -530,7 +544,7 @@ def api_crear_estancia():
 @login_required
 def api_registrar_salida(folio_servicio):
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         
         # 1. Obtenemos los datos del servicio para saber a qué hora entró
@@ -586,8 +600,6 @@ def api_registrar_salida(folio_servicio):
         """, (folio_servicio, servicio['matricula'], tiempo_formateado, usuario_id, monto_total))
         
         conn.commit()
-        cursor.close()
-        conn.close()
         
         return jsonify({
             "success": True, 
@@ -606,25 +618,23 @@ def api_registrar_salida(folio_servicio):
 def api_crear_pension():
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
-        # Insertamos la pensión. (Asumiendo columnas: cliente_id, fecha_inicio, fecha_fin, monto, estado)
-        query = """INSERT INTO Pensiones (cliente_id, fecha_inicio, fecha_fin, monto, estado) 
-                   VALUES (%s, %s, %s, %s, %s)"""
+        query = """INSERT INTO Pensiones (cliente_id, matricula, fecha_inicio, fecha_fin, monto, estatus) 
+                   VALUES (%s, %s, %s, %s, %s, %s)"""
         valores = (
             data.get("cliente_id"),
+            data.get("matricula").upper(),
             data.get("fecha_inicio"),
             data.get("fecha_fin"),
-            float(data.get("costo_mensual", 0.0)),
+            float(data.get("monto", 0.0)),
             "ACTIVA"
         )
         
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Pensión registrada correctamente"})
         
     except mysql.connector.Error as err:
@@ -636,25 +646,25 @@ def api_crear_pension():
 def api_editar_pension(pension_id):
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         query = """UPDATE Pensiones 
-                   SET fecha_inicio=%s, fecha_fin=%s, monto=%s, estado=%s 
-                   WHERE pension_id=%s"""
+                   SET cliente_id=%s, matricula=%s, fecha_inicio=%s, fecha_fin=%s, monto=%s, estatus=%s 
+                   WHERE id_pension=%s"""
         valores = (
+            data.get("cliente_id"),
+            data.get("matricula").upper() if data.get("matricula") else "",
             data.get("fecha_inicio"),
             data.get("fecha_fin"),
-            float(data.get("costo_mensual", 0.0)),
-            data.get("estado", "ACTIVA"),
+            float(data.get("monto", 0.0)),
+            data.get("estatus", "ACTIVA"),
             pension_id
         )
         
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Pensión actualizada correctamente"})
         
     except mysql.connector.Error as err:
@@ -664,15 +674,13 @@ def api_editar_pension(pension_id):
 @login_required
 def api_eliminar_pension(pension_id):
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         # En lugar de borrar el registro (para no perder el historial), es mejor cambiar el estado a CANCELADA
-        cursor.execute("UPDATE Pensiones SET estado='CANCELADA' WHERE pension_id=%s", (pension_id,))
+        cursor.execute("UPDATE Pensiones SET estatus='CANCELADA' WHERE id_pension=%s", (pension_id,))
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Pensión cancelada correctamente"})
         
     except mysql.connector.Error as err:
@@ -687,7 +695,7 @@ def api_eliminar_pension(pension_id):
 def api_crear_tarifa():
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         # Insertamos el nuevo precio/tarifa
@@ -701,8 +709,6 @@ def api_crear_tarifa():
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Tarifa creada correctamente"})
         
     except mysql.connector.Error as err:
@@ -714,7 +720,7 @@ def api_crear_tarifa():
 def api_editar_tarifa(folio_precio):
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         query = "UPDATE Precios SET tipo=%s, precio=%s WHERE folio_precio=%s"
@@ -727,8 +733,6 @@ def api_editar_tarifa(folio_precio):
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Tarifa actualizada correctamente"})
         
     except mysql.connector.Error as err:
@@ -744,7 +748,7 @@ def api_editar_tarifa(folio_precio):
 def api_crear_usuario():
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         query = """INSERT INTO Usuarios (nombre, email, username, password, perfil) 
@@ -761,8 +765,6 @@ def api_crear_usuario():
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Usuario creado correctamente"})
         
     except mysql.connector.Error as err:
@@ -776,7 +778,7 @@ def api_crear_usuario():
 def api_editar_usuario(usuario_id):
     data = request.json
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         # Si el administrador escribió algo en la contraseña, la actualizamos. Si no, se queda la que ya tenía.
@@ -807,8 +809,6 @@ def api_editar_usuario(usuario_id):
         cursor.execute(query, valores)
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Usuario actualizado correctamente"})
         
     except mysql.connector.Error as err:
@@ -823,14 +823,12 @@ def api_eliminar_usuario(usuario_id):
         return jsonify({"success": False, "message": "No puedes eliminar tu propia cuenta mientras estás conectado."})
         
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor()
         
         cursor.execute("DELETE FROM Usuarios WHERE usuario_id=%s", (usuario_id,))
         conn.commit()
         
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Usuario eliminado correctamente"})
         
     except mysql.connector.Error as err:
@@ -845,7 +843,7 @@ def api_eliminar_usuario(usuario_id):
 @login_required
 def api_stats():
     try:
-        conn = get_db_connection()
+        conn = get_db()
         cursor = conn.cursor(dictionary=True)
         
         # 1. Vehículos dentro
@@ -870,8 +868,6 @@ def api_stats():
         """, (hoy,))
         ingresos_hoy = cursor.fetchone()['total'] or 0.0
 
-        cursor.close()
-        conn.close()
         
         return jsonify({
             "success": True,

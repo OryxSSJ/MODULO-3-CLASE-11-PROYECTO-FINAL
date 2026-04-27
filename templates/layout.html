@@ -23,7 +23,7 @@
         </a>
         <a href="{{ url_for('estancias') }}" class="sidebar-nav-item {% if request.endpoint == 'estancias' %}active{% endif %}">
           <span class="nav-icon">🚗</span> Estancias
-          <span class="nav-badge" id="badge-vehiculos-activos">0</span>
+          <span class="nav-badge" id="badge-vehiculos-activos">{{ global_stats.vehiculos_dentro if global_stats else 0 }}</span>
         </a>
         <a href="{{ url_for('pagos') }}" class="sidebar-nav-item {% if request.endpoint == 'pagos' %}active{% endif %}">
           <span class="nav-icon">💰</span> Pagos
