@@ -1,4 +1,4 @@
-# 🅿️ ParkSystem — Estacionamiento Público
+# ParkSystem — Estacionamiento Público
 ### MODULO 3 CLASE 11 PROYECTO FINAL
 
 Sistema de gestión de estacionamiento público — Proyecto Final de Base de Datos.
@@ -34,7 +34,7 @@ python app.py
 
 ---
 
-## 🔑 Credenciales de Acceso
+## Credenciales de Acceso
 
 | Usuario     | Contraseña    | Rol       |
 |-------------|---------------|-----------|
@@ -47,7 +47,7 @@ python app.py
 
 ---
 
-## 📋 Modelo de Datos (ER)
+## Modelo de Datos (ER)
 
 | Entidad    | Descripción                                |
 |------------|--------------------------------------------|
@@ -69,7 +69,7 @@ $20.00 + (30 × $0.25) = $27.50
 
 ---
 
-## 📋 Páginas del Sistema
+## Páginas del Sistema
 
 | Página      | URL            | Descripción                       |
 |-------------|----------------|-----------------------------------|
@@ -86,7 +86,7 @@ $20.00 + (30 × $0.25) = $27.50
 
 ---
 
-## 🛠️ Tecnologías
+## Tecnologías
 
 - **Python 3** + **Flask** (backend)
 - **HTML5 / CSS3 / JavaScript** (frontend)
