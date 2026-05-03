@@ -1,0 +1,192 @@
+{
+  "clientes": [
+    {
+      "Field": "cliente_id",
+      "Type": "int"
+    },
+    {
+      "Field": "nombre",
+      "Type": "varchar(30)"
+    },
+    {
+      "Field": "telefono",
+      "Type": "varchar(10)"
+    },
+    {
+      "Field": "email",
+      "Type": "varchar(50)"
+    },
+    {
+      "Field": "usuario_id",
+      "Type": "int"
+    },
+    {
+      "Field": "rfc",
+      "Type": "varchar(13)"
+    },
+    {
+      "Field": "tipo",
+      "Type": "varchar(50)"
+    },
+    {
+      "Field": "estado",
+      "Type": "varchar(20)"
+    }
+  ],
+  "cobros": [
+    {
+      "Field": "folio_cobro",
+      "Type": "int"
+    },
+    {
+      "Field": "folio_servicio",
+      "Type": "int"
+    },
+    {
+      "Field": "matricula",
+      "Type": "varchar(7)"
+    },
+    {
+      "Field": "hora_estancia",
+      "Type": "varchar(8)"
+    },
+    {
+      "Field": "usuario_id",
+      "Type": "int"
+    },
+    {
+      "Field": "monto_total",
+      "Type": "decimal(10,2)"
+    },
+    {
+      "Field": "fecha_cobro",
+      "Type": "datetime"
+    }
+  ],
+  "pensiones": [
+    {
+      "Field": "id_pension",
+      "Type": "int"
+    },
+    {
+      "Field": "cliente_id",
+      "Type": "int"
+    },
+    {
+      "Field": "matricula",
+      "Type": "varchar(20)"
+    },
+    {
+      "Field": "fecha_inicio",
+      "Type": "date"
+    },
+    {
+      "Field": "fecha_fin",
+      "Type": "date"
+    },
+    {
+      "Field": "monto",
+      "Type": "decimal(10,2)"
+    },
+    {
+      "Field": "estatus",
+      "Type": "varchar(20)"
+    }
+  ],
+  "precios": [
+    {
+      "Field": "folio_precio",
+      "Type": "int"
+    },
+    {
+      "Field": "tipo",
+      "Type": "varchar(10)"
+    },
+    {
+      "Field": "precio",
+      "Type": "double"
+    }
+  ],
+  "servicios": [
+    {
+      "Field": "folio_servicio",
+      "Type": "int"
+    },
+    {
+      "Field": "matricula",
+      "Type": "varchar(7)"
+    },
+    {
+      "Field": "fecha_entrada",
+      "Type": "varchar(10)"
+    },
+    {
+      "Field": "hora_entrada",
+      "Type": "varchar(8)"
+    },
+    {
+      "Field": "fecha_salida",
+      "Type": "varchar(10)"
+    },
+    {
+      "Field": "hora_salida",
+      "Type": "varchar(8)"
+    },
+    {
+      "Field": "folio_precio",
+      "Type": "int"
+    },
+    {
+      "Field": "tipo_servicio",
+      "Type": "varchar(8)"
+    }
+  ],
+  "usuarios": [
+    {
+      "Field": "usuario_id",
+      "Type": "int"
+    },
+    {
+      "Field": "nombre",
+      "Type": "varchar(30)"
+    },
+    {
+      "Field": "email",
+      "Type": "varchar(50)"
+    },
+    {
+      "Field": "username",
+      "Type": "varchar(30)"
+    },
+    {
+      "Field": "password",
+      "Type": "varchar(30)"
+    },
+    {
+      "Field": "perfil",
+      "Type": "varchar(10)"
+    }
+  ],
+  "vehiculos": [
+    {
+      "Field": "matricula",
+      "Type": "varchar(7)"
+    },
+    {
+      "Field": "modelo",
+      "Type": "varchar(10)"
+    },
+    {
+      "Field": "marca",
+      "Type": "varchar(10)"
+    },
+    {
+      "Field": "color",
+      "Type": "varchar(10)"
+    },
+    {
+      "Field": "cliente_id",
+      "Type": "int"
+    }
+  ]
+}
