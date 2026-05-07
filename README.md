@@ -55,7 +55,7 @@ python app.py
 
 | Usuario     | Contraseña    | Rol       |
 |-------------|---------------|-----------|
-| `admin`     | `admin123`    | Admin     |
+| `admin`     | `admin`    | Admin     |
 
 > **Admin** = acceso total (Usuarios + Reportes)  
 > **Cobrador** = registra entradas/salidas, clientes y vehículos
