@@ -152,7 +152,7 @@ function showToast(message, type = 'success') {
    ANIMATIONS
    ============================================================ */
 function initAnimations() {
-  document.querySelectorAll('.stat-card-value[data-count]').forEach(el => {
+  document.querySelectorAll('[data-count]').forEach(el => {
     const target = parseInt(el.getAttribute('data-count'));
     if (!isNaN(target)) animateCount(el, 0, target, 1000);
   });
@@ -382,25 +382,31 @@ function verCliente(id, nombre, telefono, tipo, estado, fecha) {
    ============================================================ */
 function crearTarifa() {
   const data = getFormData('form-crear-tarifa');
-  if (!data.tipo || !data.precio) return showToast('Tipo y precio son requeridos', 'error');
+  if (!data.descripcion || !data.costo_inicial) return showToast('Descripción y costo inicial son requeridos', 'error');
   apiRequest('/api/tarifas', 'POST', data).then(r => {
     if (r.message && !r.error) { showToast(r.message); closeModal('modal-crear-tarifa'); reloadAfterDelay(); }
     else showToast(r.error || 'Error al crear', 'error');
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
-function abrirEditarTarifa(id, tipo, precio) {
+function abrirEditarTarifa(id, desc, tiempo, costo, extra, estado) {
   document.getElementById('edit-tarifa-id').value = id;
-  document.getElementById('edit-tarifa-tipo').value = tipo;
-  document.getElementById('edit-tarifa-precio').value = precio;
+  document.getElementById('edit-tarifa-desc').value = desc;
+  document.getElementById('edit-tarifa-tiempo').value = tiempo;
+  document.getElementById('edit-tarifa-costo').value = costo;
+  document.getElementById('edit-tarifa-extra').value = extra;
+  document.getElementById('edit-tarifa-estado').value = estado;
   openModal('modal-editar-tarifa');
 }
 
 function guardarEditarTarifa() {
   const id = document.getElementById('edit-tarifa-id').value;
   const data = {
-    tipo: document.getElementById('edit-tarifa-tipo').value,
-    precio: parseFloat(document.getElementById('edit-tarifa-precio').value),
+    descripcion: document.getElementById('edit-tarifa-desc').value,
+    tiempo_inicial_min: parseInt(document.getElementById('edit-tarifa-tiempo').value),
+    costo_inicial: parseFloat(document.getElementById('edit-tarifa-costo').value),
+    costo_por_min_extra: parseFloat(document.getElementById('edit-tarifa-extra').value),
+    estado: document.getElementById('edit-tarifa-estado').value
   };
   apiRequest(`/api/tarifas/${id}`, 'PUT', data).then(r => {
     if (r.message && !r.error) { showToast(r.message); closeModal('modal-editar-tarifa'); reloadAfterDelay(); }
@@ -509,7 +515,7 @@ function eliminarVehiculo(matricula) {
    ============================================================ */
 function crearPension() {
   const data = getFormData('form-crear-pension');
-  if (!data.cliente_id || !data.matricula || !data.fecha_inicio || !data.fecha_fin || !data.monto) {
+  if (!data.cliente_id || !data.fecha_inicio || !data.fecha_fin || !data.monto) {
     return showToast('Completa todos los campos obligatorios', 'error');
   }
   apiRequest('/api/pensiones', 'POST', data).then(r => {
@@ -518,10 +524,9 @@ function crearPension() {
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
-function abrirEditarPension(id_pension, cliente_id, matricula, inicio, fin, monto, estatus) {
+function abrirEditarPension(id_pension, cliente_id, inicio, fin, monto, estatus) {
   document.getElementById('edit-pension-id').value = id_pension;
   document.getElementById('edit-pension-cliente').value = cliente_id || "";
-  document.getElementById('edit-pension-matricula').value = matricula || "";
   document.getElementById('edit-pension-inicio').value = inicio;
   document.getElementById('edit-pension-fin').value = fin;
   document.getElementById('edit-pension-monto').value = monto;
@@ -533,7 +538,6 @@ function guardarEditarPension() {
   const id_pension = document.getElementById('edit-pension-id').value;
   const data = {
     cliente_id: document.getElementById('edit-pension-cliente').value,
-    matricula: document.getElementById('edit-pension-matricula').value,
     fecha_inicio: document.getElementById('edit-pension-inicio').value,
     fecha_fin: document.getElementById('edit-pension-fin').value,
     monto: document.getElementById('edit-pension-monto').value,

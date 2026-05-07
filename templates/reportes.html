@@ -18,9 +18,36 @@
       <h2 class="content-card-title"><span class="card-icon">📊</span> Entradas y Salidas por Mes (Año Actual)</h2>
     </div>
     <div class="content-card-body">
-      <div class="chart-container" style="min-height: 320px; flex-direction: column; align-items: stretch;">
-        <div class="bar-chart" id="chart-es" style="height: 220px; align-items: flex-end; padding-bottom: 0;">
-            <!-- Rendered by JS -->
+      <div style="margin-bottom: 8px;">
+        <p style="font-size:0.8rem; color:var(--teal); font-weight:600; margin-bottom:4px;">▶ Entradas</p>
+        <div class="bar-chart" style="height:220px;">
+          {% if es_por_mes %}
+            {% for d in es_por_mes %}
+            <div class="bar-chart-item">
+              <div class="bar-chart-value">{{ d.entradas }}</div>
+              <div class="bar-chart-bar" style="height:{{ d.h_e }}px; background:var(--accent-primary);"></div>
+              <div class="bar-chart-label">{{ d.mes_str }}</div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p style="color:var(--text-muted); margin:auto;">Sin datos</p>
+          {% endif %}
+        </div>
+      </div>
+      <div>
+        <p style="font-size:0.8rem; color:var(--purple); font-weight:600; margin-bottom:4px;">◀ Salidas</p>
+        <div class="bar-chart" style="height:220px;">
+          {% if es_por_mes %}
+            {% for d in es_por_mes %}
+            <div class="bar-chart-item">
+              <div class="bar-chart-value">{{ d.salidas }}</div>
+              <div class="bar-chart-bar" style="height:{{ d.h_s }}px; background:var(--accent-purple);"></div>
+              <div class="bar-chart-label">{{ d.mes_str }}</div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p style="color:var(--text-muted); margin:auto;">Sin datos</p>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -34,8 +61,20 @@
       <h2 class="content-card-title"><span class="card-icon">📅</span> Meses con Mayor Demanda</h2>
     </div>
     <div class="content-card-body">
-      <div class="grid-3" id="top-meses-container">
-        <!-- Rendered by JS -->
+      <div class="grid-3">
+        {% set medallas = ['🥇','🥈','🥉'] %}
+        {% set colores  = ['teal','purple','amber'] %}
+        {% if meses_demanda %}
+          {% for d in meses_demanda %}
+          <div class="stat-card {{ colores[loop.index0] }}" style="text-align:center;">
+            <div style="font-size:2rem; margin-bottom:0.5rem;">{{ medallas[loop.index0] }}</div>
+            <div class="stat-card-value" style="font-size:1.5rem;">{{ d.mes_str }}</div>
+            <div class="stat-card-label">{{ d.total_servicios }} servicios</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p style="color:var(--text-muted);">No hay datos.</p>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -48,10 +87,18 @@
       <h2 class="content-card-title"><span class="card-icon">🕐</span> Horarios con Mayor Demanda</h2>
     </div>
     <div class="content-card-body">
-      <div class="chart-container" style="min-height: 300px; flex-direction: column; align-items: stretch;">
-        <div class="bar-chart" id="chart-horas" style="height: 230px;">
-           <!-- Rendered by JS -->
-        </div>
+      <div class="bar-chart" style="height: 220px;">
+        {% if horas_demanda %}
+          {% for d in horas_demanda %}
+          <div class="bar-chart-item">
+            <div class="bar-chart-value">{{ d.cantidad }}</div>
+            <div class="bar-chart-bar" style="height:{{ d.h_bar }}px;"></div>
+            <div class="bar-chart-label">{{ d.hora }}:00</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p style="color:var(--text-muted); margin:auto;">No hay datos de horarios.</p>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -67,149 +114,37 @@
       <div class="stats-grid">
         <div class="stat-card teal">
           <div class="stat-card-header"><div class="stat-card-icon">🅿️</div></div>
-          <div class="stat-card-value">$<span id="total-cajon">0</span></div>
+          <div class="stat-card-value">${{ "%.2f"|format(total_cajon) }}</div>
           <div class="stat-card-label">Ingresos por cajón</div>
         </div>
         <div class="stat-card purple">
           <div class="stat-card-header"><div class="stat-card-icon">📋</div></div>
-          <div class="stat-card-value">$<span id="total-pension">0</span></div>
+          <div class="stat-card-value">${{ "%.2f"|format(total_pension) }}</div>
           <div class="stat-card-label">Ingresos por pensión</div>
         </div>
         <div class="stat-card pink">
           <div class="stat-card-header"><div class="stat-card-icon">💎</div></div>
-          <div class="stat-card-value">$<span id="total-ingresos">0</span></div>
+          <div class="stat-card-value">${{ "%.2f"|format(total_ingresos) }}</div>
           <div class="stat-card-label">Ingreso total anual</div>
         </div>
       </div>
-
       <div class="mt-3">
-        <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem;">📊 Distribución por Mes</h3>
-        <div class="chart-container" style="min-height: 260px; flex-direction: column; align-items: stretch;">
-          <div class="bar-chart" id="chart-ingresos" style="height: 200px;">
-              <!-- Rendered by JS -->
-          </div>
+        <h3 style="font-size:0.95rem; font-weight:600; margin-bottom:1rem;">📊 Distribución por Mes</h3>
+        <div class="bar-chart" style="height: 220px;">
+          {% if ingresos_mes %}
+            {% for d in ingresos_mes %}
+            <div class="bar-chart-item">
+              <div class="bar-chart-value">${{ d.total|int }}</div>
+              <div class="bar-chart-bar" style="height:{{ d.h_bar }}px;"></div>
+              <div class="bar-chart-label">{{ d.mes_str }}</div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p style="color:var(--text-muted); margin:auto;">No hay ingresos registrados este año.</p>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-  document.addEventListener('DOMContentLoaded', () => {
-    cargarReportes();
-  });
-
-  const mesesStr = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-  function cargarReportes() {
-    fetch('/api/reportes_datos')
-      .then(r => r.json())
-      .then(data => {
-        if(!data.success) {
-          console.error(data.message);
-          return;
-        }
-        
-        renderEntradasSalidas(data.es_por_mes);
-        renderDemandaMes(data.meses_demanda);
-        renderDemandaHora(data.horas_demanda);
-        renderIngresos(data.ingresos_mes);
-      });
-  }
-
-  function renderEntradasSalidas(datos) {
-    const container = document.getElementById('chart-es');
-    container.innerHTML = '';
-    if(datos.length === 0) return container.innerHTML = '<p>No hay datos</p>';
-    
-    let maxVal = Math.max(...datos.map(d => Math.max(d.entradas, d.salidas)));
-    if(maxVal === 0) maxVal = 1;
-
-    datos.forEach(d => {
-      const heightE = (d.entradas / maxVal) * 100;
-      container.innerHTML += `
-        <div class="bar-chart-item">
-          <div class="bar-chart-value">${d.entradas}</div>
-          <div class="bar-chart-bar" style="height: ${heightE}%;"></div>
-          <div class="bar-chart-label">${mesesStr[d.mes-1]}</div>
-        </div>
-      `;
-    });
-  }
-
-  function renderDemandaMes(datos) {
-    const container = document.getElementById('top-meses-container');
-    container.innerHTML = '';
-    if(datos.length === 0) return container.innerHTML = '<p>No hay datos</p>';
-
-    const medallas = ['🥇', '🥈', '🥉'];
-    const colores = ['teal', 'purple', 'amber'];
-
-    datos.forEach((d, i) => {
-      container.innerHTML += `
-        <div class="stat-card ${colores[i]}" style="text-align: center;">
-          <div style="font-size: 2rem; margin-bottom: 0.5rem;">${medallas[i]}</div>
-          <div class="stat-card-value" style="font-size: 1.5rem;">${mesesStr[d.mes-1]}</div>
-          <div class="stat-card-label">${d.total_servicios} servicios</div>
-        </div>
-      `;
-    });
-  }
-
-  function renderDemandaHora(datos) {
-    const container = document.getElementById('chart-horas');
-    container.innerHTML = '';
-    if(datos.length === 0) return container.innerHTML = '<p>No hay datos</p>';
-    
-    let maxVal = Math.max(...datos.map(d => d.cantidad));
-    if(maxVal === 0) maxVal = 1;
-
-    datos.forEach(d => {
-      const h = (d.cantidad / maxVal) * 100;
-      let grad = h > 80 ? 'background: linear-gradient(180deg, #f59e0b, #00d4aa);' : '';
-      container.innerHTML += `
-        <div class="bar-chart-item">
-          <div class="bar-chart-value">${d.cantidad}</div>
-          <div class="bar-chart-bar" style="height: ${h}%; ${grad}"></div>
-          <div class="bar-chart-label">${d.hora}:00</div>
-        </div>
-      `;
-    });
-  }
-
-  function renderIngresos(datos) {
-    const container = document.getElementById('chart-ingresos');
-    container.innerHTML = '';
-    if(datos.length === 0) return container.innerHTML = '<p>No hay datos</p>';
-
-    let totalCajon = 0;
-    let totalPension = 0;
-    
-    datos.forEach(d => {
-        totalCajon += parseFloat(d.ingresos_cajon || 0);
-        totalPension += parseFloat(d.ingresos_pension || 0);
-    });
-
-    document.getElementById('total-cajon').textContent = totalCajon.toFixed(2);
-    document.getElementById('total-pension').textContent = totalPension.toFixed(2);
-    document.getElementById('total-ingresos').textContent = (totalCajon + totalPension).toFixed(2);
-
-    let maxVal = Math.max(...datos.map(d => parseFloat(d.ingresos_cajon) + parseFloat(d.ingresos_pension)));
-    if(maxVal === 0) maxVal = 1;
-
-    datos.forEach(d => {
-      let t = parseFloat(d.ingresos_cajon) + parseFloat(d.ingresos_pension);
-      const h = (t / maxVal) * 100;
-      container.innerHTML += `
-        <div class="bar-chart-item">
-          <div class="bar-chart-value">$${t.toFixed(0)}</div>
-          <div class="bar-chart-bar" style="height: ${h}%;"></div>
-          <div class="bar-chart-label">${mesesStr[d.mes-1]}</div>
-        </div>
-      `;
-    });
-  }
-</script>
 {% endblock %}

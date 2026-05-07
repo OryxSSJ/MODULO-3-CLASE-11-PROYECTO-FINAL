@@ -43,21 +43,14 @@
             <td class="table-cell-mono">{{ p.id_pago }}</td>
             <td>
               {% if p.id_estancia %}
-                <span class="badge badge-info">🅿️ Estancia</span>
+                <span class="badge badge-info">Estancia <small>({{ p.tarifa_desc or 'Tarifa general' }})</small></span>
               {% else %}
-                <span class="badge badge-purple">📋 Pensión</span>
+                <span class="badge badge-purple">Pensión</span>
               {% endif %}
             </td>
             <td>
               {% if p.id_estancia %}
-                {% set est = None %}
-                {% for e in estancias if e.id_estancia == p.id_estancia %}{% set est = e %}{% endfor %}
-                {% if est %}
-                  {% set v = get_vehiculo(est.id_vehiculo) %}
-                  <span class="table-cell-mono">{{ v.placa if v else 'N/A' }}</span>
-                {% else %}
-                  <span class="text-muted">—</span>
-                {% endif %}
+                <span class="table-cell-mono">{{ p.placa_vehiculo if p.placa_vehiculo else 'N/A' }}</span>
               {% else %}
                 <span class="text-muted">Pensión #{{ p.id_pension }}</span>
               {% endif %}

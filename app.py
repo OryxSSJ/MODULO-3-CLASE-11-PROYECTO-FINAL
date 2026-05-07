@@ -21,23 +21,22 @@ DB_CONFIG ={
 # ============================================================
 # AUTH DECORATORS
 # ============================================================
-<<<<<<< Updated upstream
-def get_db():
-    """Establece y retorna la conexion a la base de datos de forma global y segura"""
-    if 'db' not in g:
+def get_db_connection():
+    if 'db' not in g or not g.db.is_connected():
         g.db = mysql.connector.connect(**DB_CONFIG)
     return g.db
 
+def get_db():
+    return get_db_connection()
+
 @app.teardown_appcontext
 def close_db(error):
-    """Asegura que la conexion se cierre al terminar la peticion, evitando leaks"""
     db = g.pop('db', None)
     if db is not None:
-        db.close()
-=======
-def get_db_connection():
-    return mysql.connector.connect(**DB_CONFIG)
->>>>>>> Stashed changes
+        try:
+            db.close()
+        except:
+            pass
 
 def login_required(f):
     @wraps(f)
@@ -58,57 +57,6 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-<<<<<<< Updated upstream
-# ============================================================
-# CONTEXTO GLOBAL PARA TODAS LAS PLANTILLAS
-# ============================================================
-@app.context_processor
-def inject_global_stats():
-    # Solo ejecutar si el usuario ha iniciado sesión
-    if 'user' not in session:
-        return dict(global_stats={})
-        
-    try:
-        conn = get_db()
-        cursor = conn.cursor(dictionary=True, buffered=True)
-        
-        # 1. Vehículos dentro (estancias activas sin hora de salida)
-        cursor.execute("SELECT COUNT(*) as count FROM Servicios WHERE hora_salida IS NULL")
-        vehiculos_dentro = cursor.fetchone()['count']
-        
-        # 2. Total clientes
-        cursor.execute("SELECT COUNT(*) as count FROM Clientes")
-        total_clientes = cursor.fetchone()['count']
-        
-        # 3. Pensiones activas
-        cursor.execute("SELECT COUNT(*) as count FROM Pensiones WHERE estatus = 'ACTIVA'")
-        pensiones_activas = cursor.fetchone()['count']
-        
-        # 4. Ingresos hoy
-        cursor.execute("""
-            SELECT COALESCE(SUM(monto_total), 0) as total 
-            FROM Cobros 
-            WHERE DATE(fecha_cobro) = CURDATE()
-        """)
-        ingresos_hoy = cursor.fetchone()['total']
-        
-        cursor.close()
-        
-        return dict(global_stats={
-            'vehiculos_dentro': vehiculos_dentro,
-            'total_clientes': total_clientes,
-            'pensiones_activas': pensiones_activas,
-            'ingresos_hoy': float(ingresos_hoy)
-        })
-    except Exception as e:
-        print("Error en context_processor:", e)
-        return dict(global_stats={
-            'vehiculos_dentro': 0, 'total_clientes': 0, 'pensiones_activas': 0, 'ingresos_hoy': 0.0
-        })
-
-
-=======
->>>>>>> Stashed changes
 # ============================================================
 # PAGE ROUTES
 # ============================================================
@@ -145,6 +93,32 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
+@app.context_processor
+def inject_global_stats():
+    if 'user' not in session:
+        return dict(global_stats=None)
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT COUNT(*) as vehiculos_dentro FROM ESTANCIA WHERE fecha_salida IS NULL")
+        vehiculos_dentro = cursor.fetchone()['vehiculos_dentro']
+        cursor.execute("SELECT COUNT(*) as total_clientes FROM CLIENTE")
+        total_clientes = cursor.fetchone()['total_clientes']
+        cursor.execute("SELECT SUM(monto) as ingresos_hoy FROM PAGO WHERE DATE(fecha_pago) = CURDATE()")
+        r = cursor.fetchone()
+        ingresos_hoy = r['ingresos_hoy'] if r and r['ingresos_hoy'] else 0
+        cursor.execute("SELECT COUNT(*) as pensiones_activas FROM PENSION WHERE estado='ACTIVA'")
+        pensiones_activas = cursor.fetchone()['pensiones_activas']
+        cursor.close()
+        return dict(global_stats={
+            'vehiculos_dentro': vehiculos_dentro,
+            'total_clientes': total_clientes,
+            'ingresos_hoy': float(ingresos_hoy),
+            'pensiones_activas': pensiones_activas
+        })
+    except Exception as e:
+        return dict(global_stats=None)
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -152,17 +126,6 @@ def dashboard():
         conn = get_db()
         cursor = conn.cursor(dictionary=True, buffered=True)
 
-<<<<<<< Updated upstream
-        # Estancias activas para la tabla del dashboard (LEFT JOIN porque Precios puede estar vacía)
-        cursor.execute("""
-            SELECT s.folio_servicio, s.matricula, s.fecha_entrada, s.hora_entrada,
-                   COALESCE(p.tipo, 'cajon') as tipo
-            FROM Servicios s
-            LEFT JOIN Precios p ON s.folio_precio = p.folio_precio
-            WHERE s.hora_salida IS NULL
-            ORDER BY s.fecha_entrada DESC, s.hora_entrada DESC
-        """)
-=======
         cursor.execute("SELECT COUNT(*) as vehiculos_dentro FROM ESTANCIA WHERE fecha_salida IS NULL")
         vehiculos_dentro = cursor.fetchone()['vehiculos_dentro']
         
@@ -187,18 +150,10 @@ def dashboard():
         JOIN VEHICULO v ON e.id_vehiculo = v.id_vehiculo
         LEFT JOIN TARIFA t ON e.id_tarifa = t.id_tarifa
         WHERE e.fecha_salida IS NULL""")
->>>>>>> Stashed changes
         estancias_activas = cursor.fetchall()
         cursor.close()
-<<<<<<< Updated upstream
-
-        # Las stats del dashboard ahora vienen del context_processor global (global_stats)
-        # No duplicamos queries — todo el sistema lee de la misma fuente de verdad
-        return render_template('dashboard.html', estancias_activas=estancias_activas)
-=======
         conn.close()
         return render_template('dashboard.html', stats=stats, estancias_activas=estancias_activas)
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         flash(f'Error de DB: {err}', 'error')
         return render_template('dashboard.html', estancias_activas=[])
@@ -209,16 +164,11 @@ def clientes():
     try:
       conn = get_db()
       cursor = conn.cursor(dictionary=True)
-      cursor.execute("SELECT id_cliente as id, nombre, telefono, tipo_cliente, fecha_registro, estado FROM CLIENTE")
+      cursor.execute("SELECT id_cliente as cliente_id, nombre, telefono, LOWER(tipo_cliente) as tipo, fecha_registro, LOWER(estado) as estado FROM CLIENTE")
       lista_clientes = cursor.fetchall()
-<<<<<<< Updated upstream
-  
-      return render_template('clientes.html', clientes = lista_clientes)
-=======
       cursor.close()
       conn.close()  
       return render_template('clientes.html', clientes=lista_clientes)
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         flash(f'Error al cargar clientes: {err}', 'error')
     return render_template('clientes.html', clientes=[])
@@ -236,12 +186,7 @@ def vehiculos():
         """)
         lista_vehiculos = cursor.fetchall()
         
-<<<<<<< Updated upstream
-        # También necesitamos la lista de clientes para el "select/dropdown" al registrar un vehículo
-        cursor.execute("SELECT cliente_id, nombre, estado FROM Clientes")
-=======
-        cursor.execute("SELECT id_cliente as cliente_id, nombre FROM CLIENTE")
->>>>>>> Stashed changes
+        cursor.execute("SELECT id_cliente as cliente_id, nombre, LOWER(estado) as estado FROM CLIENTE")
         lista_clientes = cursor.fetchall()
         
         return render_template('vehiculos.html', vehiculos=lista_vehiculos, clientes=lista_clientes)
@@ -285,12 +230,11 @@ def pagos():
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT p.id_pago as folio_cobro, p.id_estancia as folio_servicio, v.placa as matricula, 
-                   TIME(e.fecha_salida) as hora_estancia, p.monto as monto_total, p.fecha_pago as fecha_cobro,
-                   'Sistema' as cobrador
-            FROM PAGO p
-            LEFT JOIN ESTANCIA e ON p.id_estancia = e.id_estancia
-            LEFT JOIN VEHICULO v ON e.id_vehiculo = v.id_vehiculo
+            SELECT p.*, v.placa as placa_vehiculo, t.descripcion as tarifa_desc
+            FROM PAGO p 
+            LEFT JOIN ESTANCIA e ON p.id_estancia = e.id_estancia 
+            LEFT JOIN VEHICULO v ON e.id_vehiculo = v.id_vehiculo 
+            LEFT JOIN TARIFA t ON e.id_tarifa = t.id_tarifa
             ORDER BY p.fecha_pago DESC
         """)
         lista_cobros = cursor.fetchall()
@@ -312,15 +256,13 @@ def pensiones():
         """)
         lista_pensiones = cursor.fetchall()
         
-<<<<<<< Updated upstream
-        # Para el formulario de "Nueva Pensión" necesitamos la lista de clientes
-        cursor.execute("SELECT cliente_id, nombre, estado FROM Clientes")
-=======
-        cursor.execute("SELECT id_cliente as cliente_id, nombre FROM CLIENTE")
->>>>>>> Stashed changes
+        # Calcular ingresos mensuales activos (robusto desde Python)
+        ingreso_mensual_pensiones = sum(float(p['monto'] or 0) for p in lista_pensiones if p['estatus'] == 'ACTIVA')
+        
+        cursor.execute("SELECT id_cliente as cliente_id, nombre, LOWER(estado) as estado FROM CLIENTE")
         lista_clientes = cursor.fetchall()
         
-        return render_template('pensiones.html', pensiones=lista_pensiones, clientes=lista_clientes)
+        return render_template('pensiones.html', pensiones=lista_pensiones, clientes=lista_clientes, ingreso_mensual=ingreso_mensual_pensiones)
     except mysql.connector.Error as err:
         flash(f'Error al cargar pensiones: {err}', 'error')
         return render_template('pensiones.html', pensiones=[], clientes=[])
@@ -331,7 +273,7 @@ def tarifas():
     try:
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id_tarifa as folio_precio, descripcion as tipo, costo_inicial as precio FROM TARIFA")
+        cursor.execute("SELECT * FROM TARIFA")
         lista_precios = cursor.fetchall()
         return render_template('tarifas.html', tarifas=lista_precios)
     except mysql.connector.Error as err:
@@ -354,7 +296,84 @@ def usuarios():
 @app.route('/reportes')
 @admin_required
 def reportes():
-    return render_template('reportes.html')
+    try:
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT MONTH(fecha_entrada) as mes, COUNT(*) as entradas,
+                   SUM(CASE WHEN fecha_salida IS NOT NULL THEN 1 ELSE 0 END) as salidas
+            FROM ESTANCIA
+            WHERE YEAR(fecha_entrada) = YEAR(CURDATE())
+            GROUP BY MONTH(fecha_entrada)
+        """)
+        es_por_mes = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT MONTH(fecha_entrada) as mes, COUNT(*) as total_servicios
+            FROM ESTANCIA
+            WHERE YEAR(fecha_entrada) = YEAR(CURDATE())
+            GROUP BY MONTH(fecha_entrada)
+            ORDER BY total_servicios DESC
+            LIMIT 3
+        """)
+        meses_demanda = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT HOUR(fecha_entrada) as hora, COUNT(*) as cantidad
+            FROM ESTANCIA
+            WHERE YEAR(fecha_entrada) = YEAR(CURDATE())
+            GROUP BY HOUR(fecha_entrada)
+            ORDER BY cantidad DESC
+        """)
+        horas_demanda = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT MONTH(fecha_pago) as mes,
+                   SUM(CASE WHEN id_estancia IS NOT NULL THEN monto ELSE 0 END) as ingresos_cajon,
+                   SUM(CASE WHEN id_pension  IS NOT NULL THEN monto ELSE 0 END) as ingresos_pension
+            FROM PAGO
+            WHERE YEAR(fecha_pago) = YEAR(CURDATE())
+            GROUP BY MONTH(fecha_pago)
+        """)
+        ingresos_mes = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        # Pre-calcular alturas en px (180px = 100%) para Jinja2
+        meses_str = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+        max_es   = max((max(int(d['entradas']), int(d['salidas'])) for d in es_por_mes), default=1) or 1
+        max_hora = max((int(d['cantidad']) for d in horas_demanda), default=1) or 1
+        max_ing  = max((float(d['ingresos_cajon'] or 0)+float(d['ingresos_pension'] or 0) for d in ingresos_mes), default=1) or 1
+
+        for d in es_por_mes:
+            d['mes_str']  = meses_str[int(d['mes'])-1]
+            d['h_e'] = round(int(d['entradas']) / max_es * 180)
+            d['h_s'] = round(int(d['salidas'])  / max_es * 180)
+        for d in horas_demanda:
+            d['h_bar'] = round(int(d['cantidad']) / max_hora * 180)
+        for d in ingresos_mes:
+            d['mes_str'] = meses_str[int(d['mes'])-1]
+            total = float(d['ingresos_cajon'] or 0) + float(d['ingresos_pension'] or 0)
+            d['total'] = total
+            d['h_bar'] = round(total / max_ing * 180)
+        for d in meses_demanda:
+            d['mes_str'] = meses_str[int(d['mes'])-1]
+
+        total_cajon   = sum(float(d['ingresos_cajon']   or 0) for d in ingresos_mes)
+        total_pension = sum(float(d['ingresos_pension'] or 0) for d in ingresos_mes)
+
+        return render_template('reportes.html',
+            es_por_mes=es_por_mes, meses_demanda=meses_demanda,
+            horas_demanda=horas_demanda, ingresos_mes=ingresos_mes,
+            total_cajon=total_cajon, total_pension=total_pension,
+            total_ingresos=total_cajon+total_pension)
+    except Exception as err:
+        flash(f'Error al cargar reportes: {err}', 'error')
+        return render_template('reportes.html',
+            es_por_mes=[], meses_demanda=[], horas_demanda=[],
+            ingresos_mes=[], total_cajon=0, total_pension=0, total_ingresos=0)
+
 
 # ============================================================
 # REPORTES API (REQ 7, 8, 9, 10)
@@ -387,10 +406,6 @@ def api_reportes_datos():
         """)
         meses_demanda = cursor.fetchall()
         
-<<<<<<< Updated upstream
-        
-        return render_template('reportes.html', ingresos=ingresos_recientes)
-=======
         # 3. Horarios con mayor demanda
         cursor.execute("""
             SELECT HOUR(fecha_entrada) as hora, COUNT(*) as cantidad
@@ -421,7 +436,6 @@ def api_reportes_datos():
             "horas_demanda": horas_demanda,
             "ingresos_mes": ingresos_mes
         })
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": str(err)})
 
@@ -435,34 +449,15 @@ def api_crear_cliente():
     try:
         conn = get_db()
         cursor = conn.cursor()
-<<<<<<< Updated upstream
-        query = """INSERT INTO Clientes (nombre, telefono, email, rfc, usuario_id, tipo, estado)
-                   VALUES ( %s, %s, %s, %s, %s, %s, %s)"""
-        #obetner el id de usuario logeado y registrando al cliente
-        usuario_id = session['user']['usuario_id']
-        valores = (
-            data.get("nombre", ""),
-            data.get("telefono", ""),
-            data.get("email", ""),
-            data.get("rfc", ""),
-            usuario_id,
-            data.get("tipo", "registrado"),
-            data.get("estado", "activo")
-        )
-        cursor.execute(query, valores)
-        conn.commit()
-        nuevo_id = cursor.lastrowid
-        return jsonify({"success": True, "message": "Cliente registrado correctamente", "id": nuevo_id})
-=======
+        tipo = data.get("tipo") or data.get("tipo_cliente") or "OCASIONAL"
         query = "INSERT INTO CLIENTE (nombre, telefono, tipo_cliente) VALUES (%s, %s, %s)"
-        valores = (data.get("nombre", ""), data.get("telefono", ""), data.get("tipo_cliente", "OCASIONAL"))
+        valores = (data.get("nombre", ""), data.get("telefono", ""), tipo.upper())
         cursor.execute(query, valores)
         conn.commit()
         nuevo_id = cursor.lastrowid
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Cliente registrado", "id": nuevo_id})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": f"Error: {err}"})
 
@@ -473,30 +468,15 @@ def api_editar_cliente(id_cliente):
     try:
         conn = get_db()
         cursor = conn.cursor()
-<<<<<<< Updated upstream
-        query = """UPDATE Clientes
-                   SET nombre=%s, telefono=%s, email=%s, rfc=%s, tipo=%s, estado=%s
-                   WHERE cliente_id=%s"""
-        valores = (
-            data.get("nombre"),
-            data.get("telefono"),
-            data.get("email"),
-            data.get("rfc"),
-            data.get("tipo", "registrado"),
-            data.get("estado", "activo"),
-            id_cliente)
-        cursor.execute(query, valores)
-        conn.commit()
-        return jsonify({"success": True, "message": "Cliente actualizado correctamente"})
-=======
+        tipo = data.get("tipo") or data.get("tipo_cliente") or "OCASIONAL"
+        estado = data.get("estado", "ACTIVO")
         query = "UPDATE CLIENTE SET nombre=%s, telefono=%s, tipo_cliente=%s, estado=%s WHERE id_cliente=%s"
-        valores = (data.get("nombre"), data.get("telefono"), data.get("tipo_cliente"), data.get("estado"), id_cliente)
+        valores = (data.get("nombre"), data.get("telefono"), tipo.upper(), estado.upper(), id_cliente)
         cursor.execute(query, valores)
         conn.commit()
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Cliente actualizado"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": f"Error: {err}"})
 
@@ -508,20 +488,11 @@ def api_eliminar_cliente(id_cliente):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM CLIENTE WHERE id_cliente=%s", (id_cliente,))
         conn.commit()
-<<<<<<< Updated upstream
-        return jsonify({"success":True,"message": "Cliente eliminado correctamente"})
-    except mysql.connector.Error as err:
-        #Si hay vehiculos registrados mysql bloqueara el borrado por llave foranea, hacer un trigger
-        return jsonify({"success":False, "message": "No se puede eliminar, cliente con vehiculos registrados"})
-
-
-=======
         cursor.close()
         conn.close()
         return jsonify({"success":True,"message": "Cliente eliminado"})
     except mysql.connector.Error:
         return jsonify({"success":False, "message": "No se puede eliminar, cliente con vehículos registrados"})
->>>>>>> Stashed changes
 
 # ============================================================
 # CRUD API — VEHICULOS
@@ -535,93 +506,50 @@ def api_crear_vehiculo():
         marca = datos.get('marca')
         modelo = datos.get('modelo')
         color = datos.get('color')
-<<<<<<< Updated upstream
-        id_cliente = datos.get('cliente_id')
-        if not id_cliente: # Handle occasional
+        id_cliente = datos.get('cliente_id') or datos.get('id_cliente')
+        if id_cliente == "":
             id_cliente = None
 
-        # 2. Conectamos a la BD usando tu función estándar
-        conn = get_db()
-=======
-        id_cliente = datos.get('cliente_id') or datos.get('id_cliente')
-
         conn = get_db_connection()
->>>>>>> Stashed changes
         cursor = conn.cursor()
         cursor.execute("INSERT INTO VEHICULO (placa, marca, modelo, color, id_cliente) VALUES (%s, %s, %s, %s, %s)",
                        (matricula, marca, modelo, color, id_cliente))
         conn.commit()
-<<<<<<< Updated upstream
-
-        # 3. Respuesta de éxito
-        return jsonify({'success': True, 'mensaje': 'Vehículo registrado correctamente'})
-
-    except mysql.connector.Error as err:
-        return jsonify({'success': False, 'error': f"Error de BD: {err}"}), 500
-    except Exception as e:
-        print("Error en /api/vehiculos/crear:", e)
-        return jsonify({'success': False, 'error': str(e)}), 500
-    
-@app.route('/api/vehiculos/<string:matricula>', methods=['PUT'])
-=======
         cursor.close()
         conn.close()
         return jsonify({'success': True, 'mensaje': 'Vehículo registrado'})
     except mysql.connector.Error as err:
         return jsonify({'success': False, 'error': f"Error: {err}"}), 500
 
+@app.route('/api/vehiculos/<placa>', methods=['PUT'])
+@login_required
+def api_editar_vehiculo(placa):
+    try:
+        datos = request.get_json()
+        marca = datos.get('marca')
+        modelo = datos.get('modelo')
+        color = datos.get('color')
+        id_cliente = datos.get('cliente_id') or None
+        if id_cliente == "":
+            id_cliente = None
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE VEHICULO SET marca=%s, modelo=%s, color=%s, id_cliente=%s WHERE placa=%s",
+                       (marca, modelo, color, id_cliente, placa))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Vehículo actualizado correctamente'})
+    except mysql.connector.Error as err:
+        return jsonify({'success': False, 'error': f"Error: {err}"})
+
 @app.route('/api/vehiculos/<placa>', methods=['DELETE'])
->>>>>>> Stashed changes
 @login_required
 def api_eliminar_vehiculo(placa):
     try:
         conn = get_db()
         cursor = conn.cursor()
-<<<<<<< Updated upstream
-        
-        # No actualizamos la matrícula porque es la llave primaria, solo el resto de los datos
-        query = """UPDATE Vehiculos 
-                   SET modelo=%s, marca=%s, color=%s, cliente_id=%s 
-                   WHERE matricula=%s"""
-        
-        cliente_id = data.get("cliente_id")
-        if not cliente_id:
-            cliente_id = None
-            
-        valores = (
-            data.get("modelo"),
-            data.get("marca"),
-            data.get("color"),
-            cliente_id,
-            matricula
-        )
-        
-        cursor.execute(query, valores)
-        conn.commit()
-        
-        return jsonify({"success": True, "message": "Vehículo actualizado correctamente"})
-        
-    except mysql.connector.Error as err:
-        return jsonify({"success": False, "message": f"Error de BD: {err}"})
-
-
-@app.route('/api/vehiculos/<string:matricula>', methods=['DELETE'])
-@login_required
-def api_eliminar_vehiculo(matricula):
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        # Eliminamos buscando por la matrícula (string)
-        cursor.execute("DELETE FROM Vehiculos WHERE matricula=%s", (matricula,))
-        conn.commit()
-        
-        return jsonify({"success": True, "message": "Vehículo eliminado correctamente"})
-        
-    except mysql.connector.Error as err:
-        return jsonify({"success": False, "message": "No se puede eliminar: el vehículo tiene servicios/cobros registrados."})
-
-=======
         cursor.execute("DELETE FROM VEHICULO WHERE placa=%s", (placa,))
         conn.commit()
         cursor.close()
@@ -629,7 +557,6 @@ def api_eliminar_vehiculo(matricula):
         return jsonify({"success": True, "message": "Vehículo eliminado"})
     except mysql.connector.Error:
         return jsonify({"success": False, "message": "No se puede eliminar: tiene estancias."})
->>>>>>> Stashed changes
 
 # ============================================================
 # CRUD API — ESTANCIAS
@@ -643,7 +570,7 @@ def api_crear_estancia():
             conn = get_db_connection()
             cursor = conn.cursor(dictionary=True)
             cursor.execute("""
-                SELECT e.id_estancia as id, v.placa as matricula, DATE(e.fecha_entrada) as fecha_entrada, TIME(e.fecha_entrada) as hora_entrada, DATE(e.fecha_salida) as fecha_salida, TIME(e.fecha_salida) as hora_salida, IF(e.fecha_salida IS NULL, 'ACTIVO', 'COMPLETADO') as estado, t.descripcion as tipo, (SELECT monto FROM PAGO p WHERE p.id_estancia = e.id_estancia LIMIT 1) as total
+                SELECT e.id_estancia as id, v.placa as matricula, DATE_FORMAT(e.fecha_entrada, '%Y-%m-%d') as fecha_entrada, TIME_FORMAT(e.fecha_entrada, '%H:%i:%s') as hora_entrada, DATE_FORMAT(e.fecha_salida, '%Y-%m-%d') as fecha_salida, TIME_FORMAT(e.fecha_salida, '%H:%i:%s') as hora_salida, IF(e.fecha_salida IS NULL, 'ACTIVO', 'COMPLETADO') as estado, t.descripcion as tipo, (SELECT monto FROM PAGO p WHERE p.id_estancia = e.id_estancia LIMIT 1) as total
                 FROM ESTANCIA e JOIN VEHICULO v ON e.id_vehiculo = v.id_vehiculo LEFT JOIN TARIFA t ON e.id_tarifa = t.id_tarifa
                 ORDER BY e.fecha_salida ASC, e.fecha_entrada DESC
             """)
@@ -676,15 +603,9 @@ def api_crear_estancia():
 
         cursor.execute("INSERT INTO ESTANCIA (id_vehiculo, fecha_entrada, id_tarifa) VALUES (%s, NOW(), (SELECT MIN(id_tarifa) FROM TARIFA WHERE estado='ACTIVA'))", (id_vehiculo,))
         conn.commit()
-<<<<<<< Updated upstream
-        
-        return jsonify({"success": True, "message": f"Entrada registrada para el vehículo {valores[0]}"})
-        
-=======
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": f"Entrada registrada para {matricula}"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
 
@@ -746,6 +667,37 @@ def api_registrar_salida(id_estancia):
         return jsonify({"success": False, "error": f"Error: {err}"})
 
 # ============================================================
+# CRUD API — TARIFAS
+# ============================================================
+@app.route('/api/tarifas', methods=['POST'])
+@login_required
+def api_crear_tarifa():
+    try:
+        data = request.json
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO TARIFA (descripcion, tiempo_inicial_min, costo_inicial, costo_por_min_extra) VALUES (%s, %s, %s, %s)",
+                       (data.get('descripcion'), int(data.get('tiempo_inicial_min', 0) or 0), float(data.get('costo_inicial', 0) or 0), float(data.get('costo_por_min_extra', 0) or 0)))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Tarifa creada exitosamente'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/tarifas/<int:id_tarifa>', methods=['PUT'])
+@login_required
+def api_editar_tarifa(id_tarifa):
+    try:
+        data = request.json
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE TARIFA SET descripcion=%s, tiempo_inicial_min=%s, costo_inicial=%s, costo_por_min_extra=%s, estado=%s WHERE id_tarifa=%s",
+                       (data.get('descripcion'), data.get('tiempo_inicial_min'), data.get('costo_inicial'), data.get('costo_por_min_extra'), data.get('estado').upper(), id_tarifa))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Tarifa actualizada correctamente'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# ============================================================
 # CRUD API — PENSIONES
 # ============================================================
 @app.route('/api/pensiones', methods=['POST'])
@@ -753,31 +705,10 @@ def api_registrar_salida(id_estancia):
 def api_crear_pension():
     data = request.json
     try:
-<<<<<<< Updated upstream
-        conn = get_db()
-        cursor = conn.cursor()
-        
-        query = """INSERT INTO Pensiones (cliente_id, matricula, fecha_inicio, fecha_fin, monto, estatus) 
-                   VALUES (%s, %s, %s, %s, %s, %s)"""
-        valores = (
-            data.get("cliente_id"),
-            data.get("matricula").upper(),
-            data.get("fecha_inicio"),
-            data.get("fecha_fin"),
-            float(data.get("monto", 0.0)),
-            "ACTIVA"
-        )
-        
-        cursor.execute(query, valores)
-        conn.commit()
-        
-        return jsonify({"success": True, "message": "Pensión registrada correctamente"})
-        
-=======
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         id_cliente = data.get("cliente_id")
-        costo = float(data.get("costo_mensual", 0.0))
+        costo = float(data.get("monto", data.get("costo_mensual", 0.0)))
         
         # Req 6: Descuento para clientes con más de 2 años
         cursor.execute("SELECT fecha_registro FROM CLIENTE WHERE id_cliente = %s", (id_cliente,))
@@ -789,11 +720,13 @@ def api_crear_pension():
                 
         cursor.execute("INSERT INTO PENSION (id_cliente, fecha_inicio, fecha_fin, costo_mensual) VALUES (%s, %s, %s, %s)",
                        (id_cliente, data.get("fecha_inicio"), data.get("fecha_fin"), costo))
+        pension_id = cursor.lastrowid
+        cursor.execute("INSERT INTO PAGO (id_pension, monto, fecha_pago, metodo_pago) VALUES (%s, %s, NOW(), 'EFECTIVO')",
+                       (pension_id, costo))
         conn.commit()
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Pensión registrada con descuento por lealtad" if cliente and cliente['fecha_registro'] and anios_antiguedad > 2 else "Pensión registrada"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
 
@@ -804,34 +737,12 @@ def api_editar_pension(id_pension):
     try:
         conn = get_db()
         cursor = conn.cursor()
-<<<<<<< Updated upstream
-        
-        query = """UPDATE Pensiones 
-                   SET cliente_id=%s, matricula=%s, fecha_inicio=%s, fecha_fin=%s, monto=%s, estatus=%s 
-                   WHERE id_pension=%s"""
-        valores = (
-            data.get("cliente_id"),
-            data.get("matricula").upper() if data.get("matricula") else "",
-            data.get("fecha_inicio"),
-            data.get("fecha_fin"),
-            float(data.get("monto", 0.0)),
-            data.get("estatus", "ACTIVA"),
-            pension_id
-        )
-        
-        cursor.execute(query, valores)
-        conn.commit()
-        
-        return jsonify({"success": True, "message": "Pensión actualizada correctamente"})
-        
-=======
         cursor.execute("UPDATE PENSION SET fecha_inicio=%s, fecha_fin=%s, costo_mensual=%s, estado=%s WHERE id_pension=%s",
-                       (data.get("fecha_inicio"), data.get("fecha_fin"), float(data.get("costo_mensual", 0.0)), data.get("estado", "ACTIVA"), id_pension))
+                       (data.get("fecha_inicio"), data.get("fecha_fin"), float(data.get("monto", data.get("costo_mensual", 0.0))), data.get("estatus", data.get("estado", "ACTIVA")), id_pension))
         conn.commit()
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Pensión actualizada"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
 
@@ -841,68 +752,15 @@ def api_eliminar_pension(id_pension):
     try:
         conn = get_db()
         cursor = conn.cursor()
-<<<<<<< Updated upstream
-        
-        # En lugar de borrar el registro (para no perder el historial), es mejor cambiar el estado a CANCELADA
-        cursor.execute("UPDATE Pensiones SET estatus='CANCELADA' WHERE id_pension=%s", (pension_id,))
-        conn.commit()
-        
-        return jsonify({"success": True, "message": "Pensión cancelada correctamente"})
-        
-=======
         cursor.execute("UPDATE PENSION SET estado='CANCELADA' WHERE id_pension=%s", (id_pension,))
         conn.commit()
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Pensión cancelada"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
 
-# ============================================================
-# CRUD API — TARIFAS
-# ============================================================
-@app.route('/api/tarifas', methods=['POST'])
-@login_required
-def api_crear_tarifa():
-    data = request.json
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO TARIFA (descripcion, costo_inicial) VALUES (%s, %s)", (data.get("tipo", "General"), float(data.get("precio", 0.0))))
-        conn.commit()
-<<<<<<< Updated upstream
-        
-        return jsonify({"success": True, "message": "Tarifa creada correctamente"})
-        
-=======
-        cursor.close()
-        conn.close()
-        return jsonify({"success": True, "message": "Tarifa creada"})
->>>>>>> Stashed changes
-    except mysql.connector.Error as err:
-        return jsonify({"success": False, "error": f"Error: {err}"})
 
-@app.route('/api/tarifas/<int:id_tarifa>', methods=['PUT'])
-@login_required
-def api_editar_tarifa(id_tarifa):
-    data = request.json
-    try:
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE TARIFA SET descripcion=%s, costo_inicial=%s WHERE id_tarifa=%s", (data.get("tipo"), float(data.get("precio", 0.0)), id_tarifa))
-        conn.commit()
-<<<<<<< Updated upstream
-        
-        return jsonify({"success": True, "message": "Tarifa actualizada correctamente"})
-        
-=======
-        cursor.close()
-        conn.close()
-        return jsonify({"success": True, "message": "Tarifa actualizada"})
->>>>>>> Stashed changes
-    except mysql.connector.Error as err:
-        return jsonify({"success": False, "error": f"Error: {err}"})
 
 # ============================================================
 # CRUD API — USUARIOS
@@ -917,15 +775,9 @@ def api_crear_usuario():
         cursor.execute("INSERT INTO USUARIO (nombre, email, username, password, perfil) VALUES (%s, %s, %s, %s, %s)",
                        (data.get("nombre", ""), data.get("email", ""), data.get("username", ""), data.get("password", ""), data.get("perfil", "cobrador")))
         conn.commit()
-<<<<<<< Updated upstream
-        
-        return jsonify({"success": True, "message": "Usuario creado correctamente"})
-        
-=======
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Usuario creado"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
 
@@ -943,15 +795,9 @@ def api_editar_usuario(id_usuario):
             cursor.execute("UPDATE USUARIO SET nombre=%s, email=%s, username=%s, perfil=%s WHERE id_usuario=%s",
                            (data.get("nombre"), data.get("email"), data.get("username"), data.get("perfil"), id_usuario))
         conn.commit()
-<<<<<<< Updated upstream
-        
-        return jsonify({"success": True, "message": "Usuario actualizado correctamente"})
-        
-=======
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Usuario actualizado"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
 
@@ -965,15 +811,9 @@ def api_eliminar_usuario(id_usuario):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM USUARIO WHERE id_usuario=%s", (id_usuario,))
         conn.commit()
-<<<<<<< Updated upstream
-        
-        return jsonify({"success": True, "message": "Usuario eliminado correctamente"})
-        
-=======
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "Usuario eliminado"})
->>>>>>> Stashed changes
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": "No se puede eliminar, tiene dependencias"})
 
@@ -999,12 +839,8 @@ def api_stats():
         res = cursor.fetchone()
         ingresos_hoy = res['total'] if res and res['total'] else 0.0
 
-<<<<<<< Updated upstream
-        
-=======
         cursor.close()
         conn.close()
->>>>>>> Stashed changes
         return jsonify({
             "success": True,
             "vehiculos_dentro": vehiculos_dentro,

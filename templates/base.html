@@ -6,7 +6,7 @@
   <meta name="description" content="Sistema de Estacionamiento Público — Gestión integral de vehículos, clientes y cobros">
   <title>{% block title %}Estacionamiento Público{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🅿️</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300d4aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 10L12 4L21 10'/><path d='M6 16C6 17.1 6.9 18 8 18C9.1 18 10 17.1 10 16H14C14 17.1 14.9 18 16 18C17.1 18 18 17.1 18 16V13C18 11.9 17.1 11 16 11H8C6.9 11 6 11.9 6 13V16Z'/><path d='M7 11L8.5 8H15.5L17 11'/></svg>">
 </head>
 <body>
   <div class="bg-animated"></div>
@@ -27,7 +27,7 @@
 
   {% block content %}{% endblock %}
 
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(1, 99999) | random }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
