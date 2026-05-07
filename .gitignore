@@ -5,3 +5,11 @@ __pycache__/
 *.zip
 .DS_Store
 Thumbs.db
+
+# Debug / temp files
+fix_*.py
+scratch_*.py
+test_*.html
+check_data.py
+schema_check.py
+test_query.py

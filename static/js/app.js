@@ -310,16 +310,17 @@ function confirmarSalida(idEstancia, matricula) {
 
 function procesarSalida() {
   const id = document.getElementById('salida-id').value;
-  
-  apiRequest(`/api/estancias/${id}/salida`, 'POST', {}).then(r => {
-    if (r.message || r.total) { 
-      // Si la API devuelve el total, lo mostramos
-      const total = r.total !== undefined ? r.total : 'calculado';
-      showToast(`Salida registrada. Total a cobrar: $${total}`); 
-      closeModal('modal-salida'); 
-      reloadAfterDelay(1500); // Damos un poco más de tiempo para que lean el total
-    } else { 
-      showToast(r.error || 'Error al procesar salida', 'error'); 
+  const metodoPagoEl = document.getElementById('salida-metodo-pago');
+  const metodo_pago = metodoPagoEl ? metodoPagoEl.value : 'EFECTIVO';
+
+  apiRequest(`/api/estancias/${id}/salida`, 'POST', { metodo_pago }).then(r => {
+    if (r.ok || r.message || r.total) {
+      const total = r.total || '?';
+      showToast(r.msg || `Salida registrada. Total: $${total}`);
+      closeModal('modal-salida');
+      reloadAfterDelay(1500);
+    } else {
+      showToast(r.msg || r.error || 'Error al procesar salida', 'error');
     }
   }).catch(() => showToast('Error de conexión', 'error'));
 }
