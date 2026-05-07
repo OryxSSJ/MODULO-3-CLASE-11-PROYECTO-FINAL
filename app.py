@@ -116,7 +116,6 @@ def inject_global_stats():
         ingresos_hoy = r['ingresos_hoy'] if r and r['ingresos_hoy'] else 0
         cursor.execute("SELECT COUNT(*) as pensiones_activas FROM PENSION WHERE estado='ACTIVA'")
         pensiones_activas = cursor.fetchone()['pensiones_activas']
-        cursor.close()
         return dict(global_stats={
             'vehiculos_dentro': vehiculos_dentro,
             'total_clientes': total_clientes,
@@ -158,8 +157,6 @@ def clientes():
       cursor = conn.cursor(dictionary=True)
       cursor.execute("SELECT id_cliente as cliente_id, nombre, telefono, LOWER(tipo_cliente) as tipo, fecha_registro, LOWER(estado) as estado FROM CLIENTE")
       lista_clientes = cursor.fetchall()
-      cursor.close()
-      conn.close()  
       return render_template('clientes.html', clientes=lista_clientes)
     except mysql.connector.Error as err:
         flash(f'Error al cargar clientes: {err}', 'error')
@@ -330,8 +327,6 @@ def reportes():
             GROUP BY MONTH(fecha_pago)
         """)
         ingresos_mes = cursor.fetchall()
-        cursor.close()
-        conn.close()
 
         # Pre-calcular alturas en px (180px = 100%) para Jinja2
         meses_str = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -384,8 +379,6 @@ def api_crear_cliente():
         cursor.execute(query, valores)
         conn.commit()
         nuevo_id = cursor.lastrowid
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Cliente registrado", "id": nuevo_id})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": f"Error: {err}"})
@@ -403,8 +396,6 @@ def api_editar_cliente(id_cliente):
         valores = (data.get("nombre"), data.get("telefono"), tipo.upper(), estado.upper(), id_cliente)
         cursor.execute(query, valores)
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Cliente actualizado"})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "message": f"Error: {err}"})
@@ -417,8 +408,6 @@ def api_eliminar_cliente(id_cliente):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM CLIENTE WHERE id_cliente=%s", (id_cliente,))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success":True,"message": "Cliente eliminado"})
     except mysql.connector.Error:
         return jsonify({"success":False, "message": "No se puede eliminar, cliente con vehículos registrados"})
@@ -444,8 +433,6 @@ def api_crear_vehiculo():
         cursor.execute("INSERT INTO VEHICULO (placa, marca, modelo, color, id_cliente) VALUES (%s, %s, %s, %s, %s)",
                        (matricula, marca, modelo, color, id_cliente))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({'success': True, 'mensaje': 'Vehículo registrado'})
     except mysql.connector.Error as err:
         return jsonify({'success': False, 'error': f"Error: {err}"}), 500
@@ -467,8 +454,6 @@ def api_editar_vehiculo(placa):
         cursor.execute("UPDATE VEHICULO SET marca=%s, modelo=%s, color=%s, id_cliente=%s WHERE placa=%s",
                        (marca, modelo, color, id_cliente, placa))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({'success': True, 'message': 'Vehículo actualizado correctamente'})
     except mysql.connector.Error as err:
         return jsonify({'success': False, 'error': f"Error: {err}"})
@@ -481,8 +466,6 @@ def api_eliminar_vehiculo(placa):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM VEHICULO WHERE placa=%s", (placa,))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Vehículo eliminado"})
     except mysql.connector.Error:
         return jsonify({"success": False, "message": "No se puede eliminar: tiene estancias."})
@@ -504,8 +487,6 @@ def api_crear_estancia():
                 ORDER BY e.fecha_salida ASC, e.fecha_entrada DESC
             """)
             res = cursor.fetchall()
-            cursor.close()
-            conn.close()
             return jsonify(res)
         except mysql.connector.Error as err:
             return jsonify([])
@@ -532,8 +513,6 @@ def api_crear_estancia():
 
         cursor.execute("INSERT INTO ESTANCIA (id_vehiculo, fecha_entrada, id_tarifa) VALUES (%s, NOW(), (SELECT MIN(id_tarifa) FROM TARIFA WHERE estado='ACTIVA'))", (id_vehiculo,))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": f"Entrada registrada para {matricula}"})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
@@ -675,8 +654,6 @@ def api_editar_pension(id_pension):
         cursor.execute("UPDATE PENSION SET fecha_inicio=%s, fecha_fin=%s, costo_mensual=%s, estado=%s WHERE id_pension=%s",
                        (data.get("fecha_inicio"), data.get("fecha_fin"), float(data.get("monto", data.get("costo_mensual", 0.0))), data.get("estatus", data.get("estado", "ACTIVA")), id_pension))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Pensión actualizada"})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
@@ -689,8 +666,6 @@ def api_eliminar_pension(id_pension):
         cursor = conn.cursor()
         cursor.execute("UPDATE PENSION SET estado='CANCELADA' WHERE id_pension=%s", (id_pension,))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Pensión cancelada"})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": f"Error: {err}"})
@@ -747,8 +722,6 @@ def api_eliminar_usuario(id_usuario):
         cursor = conn.cursor()
         cursor.execute("DELETE FROM USUARIO WHERE id_usuario=%s", (id_usuario,))
         conn.commit()
-        cursor.close()
-        conn.close()
         return jsonify({"success": True, "message": "Usuario eliminado"})
     except mysql.connector.Error as err:
         return jsonify({"success": False, "error": "No se puede eliminar, tiene dependencias"})
@@ -775,8 +748,6 @@ def api_stats():
         res = cursor.fetchone()
         ingresos_hoy = res['total'] if res and res['total'] else 0.0
 
-        cursor.close()
-        conn.close()
         return jsonify({
             "success": True,
             "vehiculos_dentro": vehiculos_dentro,

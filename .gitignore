@@ -13,3 +13,5 @@ test_*.html
 check_data.py
 schema_check.py
 test_query.py
+cleanup_close.py
+migrate_passwords.py

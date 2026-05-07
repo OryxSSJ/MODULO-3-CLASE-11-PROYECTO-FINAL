@@ -204,7 +204,12 @@ function apiRequest(url, method, data = null) {
     headers: { 'Content-Type': 'application/json' },
   };
   if (data) options.body = JSON.stringify(data);
-  return fetch(url, options).then(r => r.json());
+  return fetch(url, options).then(r => r.json()).then(r => {
+    // Normalizar: tanto {ok, msg} como {success, message/error} funcionan igual
+    if (!('ok' in r)) r.ok = r.success === true || (r.message && !r.error);
+    if (!('msg' in r)) r.msg = r.message || r.mensaje || r.error || '';
+    return r;
+  });
 }
 
 function getFormData(formId) {
