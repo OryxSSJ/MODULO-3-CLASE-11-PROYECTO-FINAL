@@ -1,10 +1,15 @@
 import mysql.connector
+import os
+from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash
+
+load_dotenv()
 
 DB_CONFIG = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',
-    'database': 'estacionamiento_db'
+    'host':     os.getenv('DB_HOST', 'localhost'),
+    'user':     os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_NAME', 'estacionamiento_db')
 }
 
 def setup_database():
@@ -15,8 +20,7 @@ def setup_database():
         # Disable foreign key checks to drop tables
         cursor.execute("SET FOREIGN_KEY_CHECKS = 0;")
         
-        tables_to_drop = ['Cobros', 'Servicios', 'Precios', 'Pensiones', 'Vehiculos', 'Clientes', 'Usuarios',
-                          'PAGO', 'ESTANCIA', 'TARIFA', 'PENSION', 'VEHICULO', 'CLIENTE', 'USUARIO']
+        tables_to_drop = ['PAGO', 'ESTANCIA', 'TARIFA', 'PENSION', 'VEHICULO', 'CLIENTE', 'USUARIO']
         
         for table in tables_to_drop:
             cursor.execute(f"DROP TABLE IF EXISTS {table};")
@@ -121,10 +125,11 @@ def setup_database():
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
 
         # Insert Default Admin and basic Tariff
+        hashed_pwd = generate_password_hash('admin')
         cursor.execute("""
             INSERT INTO USUARIO (nombre, email, username, password, perfil)
-            VALUES ('Administrador', 'admin@example.com', 'admin', 'admin', 'admin')
-        """)
+            VALUES ('Administrador', 'admin@example.com', 'admin', %s, 'admin')
+        """, (hashed_pwd,))
         
         cursor.execute("""
             INSERT INTO TARIFA (descripcion, costo_hora, horas_limite_reduccion, costo_hora_reducida, tipo_cliente_aplicable)
