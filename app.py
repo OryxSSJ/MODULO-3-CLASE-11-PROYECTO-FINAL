@@ -193,7 +193,7 @@ def estancias():
             SELECT e.id_estancia as folio_servicio, v.placa as matricula, 
                    DATE(e.fecha_entrada) as fecha_entrada, TIME(e.fecha_entrada) as hora_entrada, 
                    DATE(e.fecha_salida) as fecha_salida, TIME(e.fecha_salida) as hora_salida,
-                   t.costo_inicial as precio, t.descripcion as nombre_tarifa 
+                   t.costo_hora as precio, t.descripcion as nombre_tarifa 
             FROM ESTANCIA e
             JOIN VEHICULO v ON e.id_vehiculo = v.id_vehiculo
             LEFT JOIN TARIFA t ON e.id_tarifa = t.id_tarifa
@@ -204,7 +204,7 @@ def estancias():
         cursor.execute("SELECT placa as matricula FROM VEHICULO")
         lista_vehiculos = cursor.fetchall()
         
-        cursor.execute("SELECT id_tarifa as folio_precio, descripcion as tipo, costo_inicial as precio FROM TARIFA WHERE estado = 'ACTIVA'")
+        cursor.execute("SELECT id_tarifa as folio_precio, descripcion as tipo, costo_hora as precio FROM TARIFA WHERE estado = 'ACTIVA'")
         lista_tarifas = cursor.fetchall()
         
         return render_template('estancias.html', estancias=lista_estancias, vehiculos=lista_vehiculos, tarifas=lista_tarifas)
@@ -239,9 +239,10 @@ def pensiones():
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT p.id_pension as pension_id, p.id_cliente as cliente_id, p.fecha_inicio, p.fecha_fin, p.costo_mensual as monto, p.estado as estatus, c.nombre as nombre_cliente 
+            SELECT p.id_pension as pension_id, p.id_cliente as cliente_id, p.id_vehiculo, p.fecha_inicio, p.fecha_fin, p.costo_mensual as monto, p.estado as estatus, c.nombre as nombre_cliente, v.placa
             FROM PENSION p
-            JOIN CLIENTE c ON p.id_cliente = c.id_cliente
+            LEFT JOIN CLIENTE c ON p.id_cliente = c.id_cliente
+            LEFT JOIN VEHICULO v ON p.id_vehiculo = v.id_vehiculo
         """)
         lista_pensiones = cursor.fetchall()
         
@@ -251,7 +252,10 @@ def pensiones():
         cursor.execute("SELECT id_cliente as cliente_id, nombre, LOWER(estado) as estado FROM CLIENTE")
         lista_clientes = cursor.fetchall()
         
-        return render_template('pensiones.html', pensiones=lista_pensiones, clientes=lista_clientes,
+        cursor.execute("SELECT v.id_vehiculo, v.placa, v.id_cliente, c.nombre as nombre_cliente FROM VEHICULO v LEFT JOIN CLIENTE c ON v.id_cliente = c.id_cliente")
+        lista_vehiculos = cursor.fetchall()
+        
+        return render_template('pensiones.html', pensiones=lista_pensiones, clientes=lista_clientes, vehiculos=lista_vehiculos,
                                ingreso_mensual=ingreso_mensual_pensiones, pension_base=PENSION_MENSUAL_BASE)
     except mysql.connector.Error as err:
         flash(f'Error al cargar pensiones: {err}', 'error')
@@ -435,6 +439,8 @@ def api_crear_vehiculo():
         conn.commit()
         return jsonify({'success': True, 'mensaje': 'Vehículo registrado'})
     except mysql.connector.Error as err:
+        if err.errno == 1062:
+            return jsonify({'success': False, 'error': 'La placa ya está registrada y asignada en el sistema.'})
         return jsonify({'success': False, 'error': f"Error: {err}"}), 500
 
 @app.route('/api/vehiculos/<placa>', methods=['PUT'])
@@ -456,6 +462,8 @@ def api_editar_vehiculo(placa):
         conn.commit()
         return jsonify({'success': True, 'message': 'Vehículo actualizado correctamente'})
     except mysql.connector.Error as err:
+        if err.errno == 1062:
+            return jsonify({'success': False, 'error': 'La nueva placa ingresada ya está en uso.'})
         return jsonify({'success': False, 'error': f"Error: {err}"})
 
 @app.route('/api/vehiculos/<placa>', methods=['DELETE'])
@@ -494,13 +502,23 @@ def api_crear_estancia():
     data = request.json
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        matricula = data.get("matricula").upper()
+        cursor = conn.cursor(dictionary=True) # Usamos dictionary para facilidad
+        matricula = data.get("matricula", "").strip().upper()
         
-        # Check if vehicle exists, if not, wait we should error? The UI requires vehicle registration now or just accepts plate?
-        # estancias.html modal just asks for matricula and tipo.
-        # In new schema, ESTANCIA requires id_vehiculo. So we MUST ensure vehicle exists.
+        if not matricula:
+            return jsonify({"success": False, "error": "La matrícula es requerida."})
+        
+        # 1. Blindaje: Evitar doble entrada
         cursor.execute("SELECT id_vehiculo FROM VEHICULO WHERE placa = %s", (matricula,))
+        veh_row = cursor.fetchone()
+        if veh_row:
+            id_vehiculo = veh_row['id_vehiculo']
+            cursor.execute("SELECT id_estancia FROM ESTANCIA WHERE id_vehiculo = %s AND fecha_salida IS NULL", (id_vehiculo,))
+            if cursor.fetchone():
+                return jsonify({"success": False, "error": "Operación denegada: Este vehículo ya se encuentra dentro del estacionamiento."})
+        
+        # Continuar con flujo normal
+        cursor.execute("SELECT id_vehiculo, id_cliente FROM VEHICULO WHERE placa = %s", (matricula,))
         veh_row = cursor.fetchone()
         
         if not veh_row:
@@ -508,10 +526,31 @@ def api_crear_estancia():
             cursor.execute("INSERT INTO VEHICULO (placa) VALUES (%s)", (matricula,))
             conn.commit()
             id_vehiculo = cursor.lastrowid
+            tipo_cliente = 'OCASIONAL'
         else:
-            id_vehiculo = veh_row[0]
+            id_vehiculo = veh_row['id_vehiculo']
+            id_cliente = veh_row['id_cliente']
+            if id_cliente:
+                cursor.execute("SELECT tipo_cliente FROM CLIENTE WHERE id_cliente = %s", (id_cliente,))
+                cli_row = cursor.fetchone()
+                tipo_cliente = cli_row['tipo_cliente'] if cli_row else 'OCASIONAL'
+            else:
+                tipo_cliente = 'OCASIONAL'
 
-        cursor.execute("INSERT INTO ESTANCIA (id_vehiculo, fecha_entrada, id_tarifa) VALUES (%s, NOW(), (SELECT MIN(id_tarifa) FROM TARIFA WHERE estado='ACTIVA'))", (id_vehiculo,))
+        id_tarifa = data.get("id_tarifa")
+        if not id_tarifa:
+            cursor.execute("SELECT id_tarifa FROM TARIFA WHERE estado='ACTIVA' AND tipo_cliente_aplicable IN (%s, 'AMBOS') ORDER BY tipo_cliente_aplicable ASC LIMIT 1", (tipo_cliente,))
+            tar_row = cursor.fetchone()
+            id_tarifa = tar_row['id_tarifa'] if tar_row else 1
+        else:
+            cursor.execute("SELECT tipo_cliente_aplicable FROM TARIFA WHERE id_tarifa = %s", (id_tarifa,))
+            tar_row = cursor.fetchone()
+            if tar_row:
+                tipo_aplica = tar_row['tipo_cliente_aplicable']
+                if tipo_aplica == 'REGISTRADO' and tipo_cliente != 'REGISTRADO':
+                    return jsonify({"success": False, "error": "Operación denegada: Tarifa exclusiva para vehículos de Clientes Registrados."})
+
+        cursor.execute("INSERT INTO ESTANCIA (id_vehiculo, fecha_entrada, id_tarifa) VALUES (%s, NOW(), %s)", (id_vehiculo, id_tarifa))
         conn.commit()
         return jsonify({"success": True, "message": f"Entrada registrada para {matricula}"})
     except mysql.connector.Error as err:
@@ -529,7 +568,7 @@ def api_registrar_salida(id_estancia):
         # Obtener estancia con tarifa asignada y tipo de cliente
         cursor.execute("""
             SELECT e.*, v.placa, c.tipo_cliente,
-                   t.tiempo_inicial_min, t.costo_inicial, t.costo_por_min_extra
+                   t.costo_hora, t.horas_limite_reduccion, t.costo_hora_reducida
             FROM ESTANCIA e
             JOIN VEHICULO v ON e.id_vehiculo = v.id_vehiculo
             LEFT JOIN CLIENTE c ON v.id_cliente = c.id_cliente
@@ -544,20 +583,19 @@ def api_registrar_salida(id_estancia):
         ahora = datetime.now()
         minutos_totales = max(1, int((ahora - servicio['fecha_entrada']).total_seconds() / 60))
 
-        # Calcular monto desde TARIFA de la DB (Req 5 dinámico)
-        costo_inicial    = float(servicio['costo_inicial']    or 30.0)
-        tiempo_ini_min   = int(servicio['tiempo_inicial_min'] or 60)
-        costo_extra_min  = float(servicio['costo_por_min_extra'] or 0.5)
+        # Req 5: Calcular monto por hora completa (redondeo hacia arriba)
+        horas = math.ceil(minutos_totales / 60.0)
+        if horas < 1:
+            horas = 1
 
-        if minutos_totales <= tiempo_ini_min:
-            monto_total = costo_inicial
+        tarifa_base = float(servicio['costo_hora'] or 30.0)
+        horas_limite = int(servicio['horas_limite_reduccion'] or 5)
+        tarifa_reducida = float(servicio['costo_hora_reducida'] or 25.0)
+
+        if horas <= horas_limite or horas_limite == 0:
+            monto_total = horas * tarifa_base
         else:
-            mins_extra = minutos_totales - tiempo_ini_min
-            monto_total = costo_inicial + (mins_extra * costo_extra_min)
-
-        # Descuento 10% para clientes REGISTRADO (Req 5)
-        if servicio.get('tipo_cliente') == 'REGISTRADO':
-            monto_total *= 0.90
+            monto_total = (horas_limite * tarifa_base) + ((horas - horas_limite) * tarifa_reducida)
 
         cursor.execute("UPDATE ESTANCIA SET fecha_salida=%s WHERE id_estancia=%s", (ahora, id_estancia))
         cursor.execute("INSERT INTO PAGO (id_estancia, monto, fecha_pago, metodo_pago) VALUES (%s, %s, %s, %s)",
@@ -579,8 +617,8 @@ def api_crear_tarifa():
         data = request.json
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO TARIFA (descripcion, tiempo_inicial_min, costo_inicial, costo_por_min_extra) VALUES (%s, %s, %s, %s)",
-                       (data.get('descripcion'), int(data.get('tiempo_inicial_min', 0) or 0), float(data.get('costo_inicial', 0) or 0), float(data.get('costo_por_min_extra', 0) or 0)))
+        cursor.execute("INSERT INTO TARIFA (descripcion, costo_hora, horas_limite_reduccion, costo_hora_reducida, tipo_cliente_aplicable) VALUES (%s, %s, %s, %s, %s)",
+                       (data.get('descripcion'), float(data.get('costo_hora', 0) or 0), int(data.get('horas_limite_reduccion', 0) or 0), float(data.get('costo_hora_reducida', 0) or 0), data.get('tipo_cliente_aplicable', 'AMBOS')))
         conn.commit()
         return jsonify({'success': True, 'message': 'Tarifa creada exitosamente'})
     except Exception as e:
@@ -593,8 +631,8 @@ def api_editar_tarifa(id_tarifa):
         data = request.json
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("UPDATE TARIFA SET descripcion=%s, tiempo_inicial_min=%s, costo_inicial=%s, costo_por_min_extra=%s, estado=%s WHERE id_tarifa=%s",
-                       (data.get('descripcion'), data.get('tiempo_inicial_min'), data.get('costo_inicial'), data.get('costo_por_min_extra'), data.get('estado').upper(), id_tarifa))
+        cursor.execute("UPDATE TARIFA SET descripcion=%s, costo_hora=%s, horas_limite_reduccion=%s, costo_hora_reducida=%s, tipo_cliente_aplicable=%s, estado=%s WHERE id_tarifa=%s",
+                       (data.get('descripcion'), data.get('costo_hora'), data.get('horas_limite_reduccion'), data.get('costo_hora_reducida'), data.get('tipo_cliente_aplicable'), data.get('estado').upper(), id_tarifa))
         conn.commit()
         return jsonify({'success': True, 'message': 'Tarifa actualizada correctamente'})
     except Exception as e:
@@ -610,16 +648,34 @@ def api_crear_pension():
     try:
         fecha_inicio = data.get("fecha_inicio")
         fecha_fin    = data.get("fecha_fin")
+        id_vehiculo  = data.get("vehiculo_id")
+
+        if not id_vehiculo or not fecha_inicio or not fecha_fin:
+            return jsonify({"success": False, "error": "Datos incompletos. Se requieren fechas y vehículo."})
+
         # Validación backend de fechas
-        if fecha_inicio and fecha_fin:
-            fi = datetime.strptime(fecha_inicio, "%Y-%m-%d")
-            ff = datetime.strptime(fecha_fin,    "%Y-%m-%d")
-            if ff <= fi:
-                return jsonify({"success": False, "error": "La fecha de fin debe ser posterior a la fecha de inicio."})
+        fi = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+        ff = datetime.strptime(fecha_fin,    "%Y-%m-%d")
+        if ff <= fi:
+            return jsonify({"success": False, "error": "La fecha de fin debe ser posterior a la fecha de inicio."})
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
+
+        # 2. Blindaje: Evitar pensiones traslapadas activas
+        cursor.execute("SELECT id_pension FROM PENSION WHERE id_vehiculo = %s AND estado = 'ACTIVA'", (id_vehiculo,))
+        if cursor.fetchone():
+            return jsonify({"success": False, "error": "Operación denegada: Este vehículo ya tiene una pensión ACTIVA. Cancélela antes de registrar una nueva."})
+        
         id_cliente   = data.get("cliente_id")
+        
+        # Si no nos pasaron cliente pero sí vehículo, inferir el cliente
+        if id_vehiculo and not id_cliente:
+            cursor.execute("SELECT id_cliente FROM VEHICULO WHERE id_vehiculo = %s", (id_vehiculo,))
+            veh_row = cursor.fetchone()
+            if veh_row:
+                id_cliente = veh_row['id_cliente']
+
         costo        = float(data.get("monto", data.get("costo_mensual", PENSION_MENSUAL_BASE)))
         metodo_pago  = data.get("metodo_pago", "EFECTIVO").upper()
 
@@ -633,8 +689,8 @@ def api_crear_pension():
                 costo *= 0.80
                 descuento_aplicado = True
 
-        cursor.execute("INSERT INTO PENSION (id_cliente, fecha_inicio, fecha_fin, costo_mensual) VALUES (%s, %s, %s, %s)",
-                       (id_cliente, fecha_inicio, fecha_fin, costo))
+        cursor.execute("INSERT INTO PENSION (id_cliente, id_vehiculo, fecha_inicio, fecha_fin, costo_mensual) VALUES (%s, %s, %s, %s, %s)",
+                       (id_cliente, id_vehiculo, fecha_inicio, fecha_fin, costo))
         pension_id = cursor.lastrowid
         cursor.execute("INSERT INTO PAGO (id_pension, monto, fecha_pago, metodo_pago) VALUES (%s, %s, NOW(), %s)",
                        (pension_id, costo, metodo_pago))
@@ -650,9 +706,36 @@ def api_editar_pension(id_pension):
     data = request.json
     try:
         conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE PENSION SET fecha_inicio=%s, fecha_fin=%s, costo_mensual=%s, estado=%s WHERE id_pension=%s",
-                       (data.get("fecha_inicio"), data.get("fecha_fin"), float(data.get("monto", data.get("costo_mensual", 0.0))), data.get("estatus", data.get("estado", "ACTIVA")), id_pension))
+        cursor = conn.cursor(dictionary=True)
+        
+        id_cliente = data.get("cliente_id")
+        id_vehiculo = data.get("vehiculo_id")
+        fecha_inicio = data.get("fecha_inicio")
+        fecha_fin = data.get("fecha_fin")
+        monto = float(data.get("monto", data.get("costo_mensual", 0.0)))
+        estado = data.get("estatus", data.get("estado", "ACTIVA"))
+
+        # 3. Blindaje: Validar fechas en edición
+        if fecha_inicio and fecha_fin:
+            fi = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+            ff = datetime.strptime(fecha_fin,    "%Y-%m-%d")
+            if ff <= fi:
+                return jsonify({"success": False, "error": "La fecha de fin debe ser posterior a la fecha de inicio."})
+
+        # 4. Blindaje: Evitar traslapes en edición si se activa
+        if id_vehiculo and estado == 'ACTIVA':
+            cursor.execute("SELECT id_pension FROM PENSION WHERE id_vehiculo = %s AND estado = 'ACTIVA' AND id_pension != %s", (id_vehiculo, id_pension))
+            if cursor.fetchone():
+                return jsonify({"success": False, "error": "Operación denegada: El vehículo ya tiene OTRA pensión activa."})
+
+        if id_vehiculo and not id_cliente:
+            cursor.execute("SELECT id_cliente FROM VEHICULO WHERE id_vehiculo = %s", (id_vehiculo,))
+            veh_row = cursor.fetchone()
+            if veh_row:
+                id_cliente = veh_row['id_cliente']
+
+        cursor.execute("UPDATE PENSION SET fecha_inicio=%s, fecha_fin=%s, costo_mensual=%s, estado=%s, id_vehiculo=%s, id_cliente=%s WHERE id_pension=%s",
+                       (fecha_inicio, fecha_fin, monto, estado, id_vehiculo, id_cliente, id_pension))
         conn.commit()
         return jsonify({"success": True, "message": "Pensión actualizada"})
     except mysql.connector.Error as err:

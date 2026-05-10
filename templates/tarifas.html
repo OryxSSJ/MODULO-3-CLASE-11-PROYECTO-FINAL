@@ -24,22 +24,23 @@
   <div class="content-card-body" style="padding:0;">
     <div class="table-container">
       <table class="data-table">
-        <thead><tr><th>ID</th><th>Descripción</th><th>Tiempo Inicial</th><th>Costo Inicial</th><th>Costo/Min Extra</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <thead><tr><th>ID</th><th>Descripción</th><th>Costo/Hora</th><th>Horas Límite</th><th>Costo Reducido</th><th>Aplica a</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody>
           {% for t in tarifas %}
           <tr>
             <td class="table-cell-mono">{{ t.id or t.id_tarifa }}</td>
             <td class="table-cell-primary">{{ t.descripcion or 'Sin descripción' }}</td>
-            <td>{{ t.tiempo_inicial_min or 0 }} min</td>
-            <td class="table-cell-primary" style="font-weight:700;">${{ "%.2f"|format(t.costo_inicial or 0) }}</td>
-            <td class="table-cell-mono">${{ "%.4f"|format(t.costo_por_min_extra or 0) }}</td>
+            <td class="table-cell-primary" style="font-weight:700;">${{ "%.2f"|format(t.costo_hora or 0) }}</td>
+            <td>{{ t.horas_limite_reduccion or 0 }} hrs</td>
+            <td class="table-cell-mono">${{ "%.2f"|format(t.costo_hora_reducida or 0) }}</td>
+            <td><span class="badge badge-info">{{ t.tipo_cliente_aplicable }}</span></td>
             <td>
               {% if t.estado == 'ACTIVA' %}<span class="badge badge-success">✅ Activa</span>
               {% else %}<span class="badge badge-danger">❌ Inactiva</span>{% endif %}
             </td>
             <td>
               <button class="btn btn-ghost btn-sm" title="Editar" 
-                onclick="abrirEditarTarifa('{{ t.id or t.id_tarifa }}', '{{ t.descripcion or "" }}', '{{ t.tiempo_inicial_min or 0 }}', '{{ t.costo_inicial or 0 }}', '{{ t.costo_por_min_extra or 0 }}', '{{ t.estado or "INACTIVA" }}')">✏️</button>
+                onclick="abrirEditarTarifa('{{ t.id or t.id_tarifa }}', '{{ t.descripcion or "" }}', '{{ t.costo_hora or 0 }}', '{{ t.horas_limite_reduccion or 0 }}', '{{ t.costo_hora_reducida or 0 }}', '{{ t.tipo_cliente_aplicable or "AMBOS" }}', '{{ t.estado or "INACTIVA" }}')">✏️</button>
             </td>
           </tr>
           {% endfor %}
@@ -57,11 +58,13 @@
     <div class="price-card" style="text-align:left;background:rgba(0,212,170,0.05);border-color:rgba(0,212,170,0.2);">
       <div class="price-card-title">Cómo se calcula el cobro</div>
       <div class="text-secondary" style="font-size:0.9rem;line-height:1.8;">
-        Si el tiempo ≤ <strong>tiempo_inicial_min</strong>: se cobra <strong>costo_inicial</strong><br>
-        Si el tiempo > <strong>tiempo_inicial_min</strong>:<br>
-        &nbsp;&nbsp;Monto = <strong style="color:var(--accent-primary);">costo_inicial + (minutos_extra × costo_por_min_extra)</strong><br><br>
-        <strong>Ejemplo:</strong> Tarifa Estándar, estancia de 90 min:<br>
-        &nbsp;&nbsp;$20.00 + (30 × $0.25) = <strong style="color:var(--accent-primary);">$27.50</strong>
+        Se calcula por <strong>hora completa</strong> (redondeo hacia arriba).<br>
+        Si horas ≤ <strong>horas_limite_reduccion</strong>:<br>
+        &nbsp;&nbsp;Monto = <strong style="color:var(--accent-primary);">horas × costo_hora</strong><br>
+        Si horas > <strong>horas_limite_reduccion</strong>:<br>
+        &nbsp;&nbsp;Monto = <strong style="color:var(--accent-primary);">(limite × costo_hora) + (horas_extra × costo_hora_reducida)</strong><br><br>
+        <strong>Ejemplo:</strong> Tarifa $30/hr, Límite 5 hrs, Reducida $25/hr. Estancia de 6 horas:<br>
+        &nbsp;&nbsp;(5 × $30.00) + (1 × $25.00) = <strong style="color:var(--accent-primary);">$175.00</strong>
       </div>
     </div>
   </div>
@@ -74,10 +77,19 @@
       <form id="form-crear-tarifa">
         <div class="form-group"><label class="form-label">Descripción</label><input type="text" name="descripcion" class="form-input-no-icon" placeholder="Ej: Tarifa Nocturna" required></div>
         <div class="grid-form-row">
-          <div class="form-group"><label class="form-label">Tiempo Inicial (min)</label><input type="number" name="tiempo_inicial_min" class="form-input-no-icon" value="60" required></div>
-          <div class="form-group"><label class="form-label">Costo Inicial ($)</label><input type="number" name="costo_inicial" class="form-input-no-icon" value="20.00" step="0.01" required></div>
+          <div class="form-group"><label class="form-label">Costo/Hora ($)</label><input type="number" name="costo_hora" class="form-input-no-icon" value="30.00" step="0.01" required></div>
+          <div class="form-group"><label class="form-label">Límite Horas</label><input type="number" name="horas_limite_reduccion" class="form-input-no-icon" value="5" required></div>
         </div>
-        <div class="form-group"><label class="form-label">Costo por Minuto Extra ($)</label><input type="number" name="costo_por_min_extra" class="form-input-no-icon" value="0.25" step="0.0001" required></div>
+        <div class="grid-form-row">
+          <div class="form-group"><label class="form-label">Costo Reducido ($)</label><input type="number" name="costo_hora_reducida" class="form-input-no-icon" value="25.00" step="0.01" required></div>
+          <div class="form-group"><label class="form-label">Aplica a</label>
+            <select name="tipo_cliente_aplicable" class="form-select">
+              <option value="AMBOS">Ambos</option>
+              <option value="OCASIONAL">Ocasional</option>
+              <option value="REGISTRADO">Registrado</option>
+            </select>
+          </div>
+        </div>
       </form>
     </div>
     <div class="modal-footer">
@@ -94,10 +106,19 @@
       <input type="hidden" id="edit-tarifa-id">
       <div class="form-group"><label class="form-label">Descripción</label><input type="text" id="edit-tarifa-desc" class="form-input-no-icon"></div>
       <div class="grid-form-row">
-        <div class="form-group"><label class="form-label">Tiempo Inicial (min)</label><input type="number" id="edit-tarifa-tiempo" class="form-input-no-icon"></div>
-        <div class="form-group"><label class="form-label">Costo Inicial ($)</label><input type="number" id="edit-tarifa-costo" class="form-input-no-icon" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Costo/Hora ($)</label><input type="number" id="edit-tarifa-costo" class="form-input-no-icon" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Límite Horas</label><input type="number" id="edit-tarifa-limite" class="form-input-no-icon"></div>
       </div>
-      <div class="form-group"><label class="form-label">Costo/Min Extra ($)</label><input type="number" id="edit-tarifa-extra" class="form-input-no-icon" step="0.0001"></div>
+      <div class="grid-form-row">
+        <div class="form-group"><label class="form-label">Costo Reducido ($)</label><input type="number" id="edit-tarifa-reducida" class="form-input-no-icon" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Aplica a</label>
+          <select id="edit-tarifa-aplica" class="form-select">
+            <option value="AMBOS">Ambos</option>
+            <option value="OCASIONAL">Ocasional</option>
+            <option value="REGISTRADO">Registrado</option>
+          </select>
+        </div>
+      </div>
       <div class="form-group">
         <label class="form-label">Estado</label>
         <select id="edit-tarifa-estado" class="form-select"><option value="ACTIVA">Activa</option><option value="INACTIVA">Inactiva</option></select>

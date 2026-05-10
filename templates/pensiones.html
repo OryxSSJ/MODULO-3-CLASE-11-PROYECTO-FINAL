@@ -32,7 +32,8 @@
     <div class="pension-card-header">
       <div>
         <div class="pension-card-client">{{ p.nombre_cliente if p.cliente_id else 'Cliente #' ~ p.cliente_id }}</div>
-        <div class="text-muted" style="font-size:0.8rem;margin-top:2px;">Pensión #{{ p.id_pension }}</div>
+        {% if p.placa %}<div style="font-size:0.9rem; font-weight:600; color:var(--text-primary); margin-top:2px;">🚗 {{ p.placa }}</div>{% endif %}
+        <div class="text-muted" style="font-size:0.8rem;margin-top:2px;">Pensión #{{ p.pension_id }}</div>
       </div>
       {% if p.estatus == 'ACTIVA' %}<span class="badge badge-success">✅ Activa</span>
       {% elif p.estatus == 'INACTIVA' %}<span class="badge badge-warning">⏸️ Inactiva</span>
@@ -48,9 +49,9 @@
     <div class="mt-1 text-muted" style="font-size:0.8rem;font-style:italic;">📝 {{ p.observaciones }}</div>
     {% endif %}
     <div class="d-flex gap-1 mt-2" style="justify-content:flex-end;">
-      <button class="btn btn-ghost btn-sm" onclick="abrirEditarPension({{ p.id_pension }}, {{ p.cliente_id|tojson }}, '{{ p.fecha_inicio }}', '{{ p.fecha_fin }}', {{ p.monto or 0 }}, '{{ p.estatus }}')">✏️ Editar</button>
+      <button class="btn btn-ghost btn-sm" onclick="abrirEditarPension({{ p.pension_id }}, {{ p.id_vehiculo|tojson }}, '{{ p.fecha_inicio }}', '{{ p.fecha_fin }}', {{ p.monto or 0 }}, '{{ p.estatus }}')">✏️ Editar</button>
       {% if p.estatus != 'CANCELADA' %}
-      <button class="btn btn-danger btn-sm" onclick="cancelarPension({{ p.id_pension }})">🗑️ Cancelar</button>
+      <button class="btn btn-danger btn-sm" onclick="cancelarPension({{ p.pension_id }})">🗑️ Cancelar</button>
       {% endif %}
     </div>
   </div>
@@ -64,10 +65,12 @@
     <div class="modal-body">
       <form id="form-crear-pension">
         <div class="form-group">
-          <label class="form-label">Cliente</label>
-          <select name="cliente_id" class="form-select" required>
-            <option value="">Seleccionar...</option>
-            {% for c in clientes if c.estado == 'activo' %}<option value="{{ c.cliente_id }}">{{ c.nombre }}</option>{% endfor %}
+          <label class="form-label">Vehículo</label>
+          <select name="vehiculo_id" class="form-select" required>
+            <option value="">Seleccionar Vehículo...</option>
+            {% for v in vehiculos %}
+              <option value="{{ v.id_vehiculo }}">{{ v.placa }} - {{ v.nombre_cliente or 'Sin asignar' }}</option>
+            {% endfor %}
           </select>
         </div>
         
@@ -95,9 +98,12 @@
     <div class="modal-body">
       <input type="hidden" id="edit-pension-id">
       <div class="form-group">
-        <label class="form-label">Cliente</label>
-        <select id="edit-pension-cliente" name="cliente_id" class="form-select">
-          {% for c in clientes %}<option value="{{ c.cliente_id }}">{{ c.nombre }}</option>{% endfor %}
+        <label class="form-label">Vehículo</label>
+        <select id="edit-pension-vehiculo" name="vehiculo_id" class="form-select">
+          <option value="">Seleccionar Vehículo...</option>
+          {% for v in vehiculos %}
+            <option value="{{ v.id_vehiculo }}">{{ v.placa }} - {{ v.nombre_cliente or 'Sin asignar' }}</option>
+          {% endfor %}
         </select>
       </div>
       

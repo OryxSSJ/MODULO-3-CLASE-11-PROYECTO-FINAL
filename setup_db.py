@@ -63,9 +63,10 @@ def setup_database():
             CREATE TABLE TARIFA (
                 id_tarifa INT AUTO_INCREMENT PRIMARY KEY,
                 descripcion VARCHAR(100),
-                tiempo_inicial_min INT,
-                costo_inicial DECIMAL(10,2),
-                costo_por_min_extra DECIMAL(10,4),
+                costo_hora DECIMAL(10,2),
+                horas_limite_reduccion INT,
+                costo_hora_reducida DECIMAL(10,2),
+                tipo_cliente_aplicable ENUM('REGISTRADO', 'OCASIONAL', 'AMBOS') DEFAULT 'AMBOS',
                 estado ENUM('ACTIVA', 'INACTIVA') DEFAULT 'ACTIVA',
                 fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
             );
@@ -90,12 +91,14 @@ def setup_database():
             CREATE TABLE PENSION (
                 id_pension INT AUTO_INCREMENT PRIMARY KEY,
                 id_cliente INT,
+                id_vehiculo INT NULL,
                 fecha_inicio DATE,
                 fecha_fin DATE,
                 costo_mensual DECIMAL(10,2),
                 estado ENUM('ACTIVA', 'INACTIVA', 'CANCELADA') DEFAULT 'ACTIVA',
                 observaciones VARCHAR(255) NULL,
-                FOREIGN KEY (id_cliente) REFERENCES CLIENTE(id_cliente) ON DELETE CASCADE
+                FOREIGN KEY (id_cliente) REFERENCES CLIENTE(id_cliente) ON DELETE CASCADE,
+                FOREIGN KEY (id_vehiculo) REFERENCES VEHICULO(id_vehiculo) ON DELETE CASCADE
             );
         """)
 
@@ -124,13 +127,18 @@ def setup_database():
         """)
         
         cursor.execute("""
-            INSERT INTO TARIFA (descripcion, tiempo_inicial_min, costo_inicial, costo_por_min_extra)
-            VALUES ('Tarifa General', 60, 30.00, 0.50)
+            INSERT INTO TARIFA (descripcion, costo_hora, horas_limite_reduccion, costo_hora_reducida, tipo_cliente_aplicable)
+            VALUES ('Público General', 30.00, 5, 25.00, 'OCASIONAL')
         """)
         
         cursor.execute("""
-            INSERT INTO TARIFA (descripcion, tiempo_inicial_min, costo_inicial, costo_por_min_extra)
-            VALUES ('Pensión Mensual', 0, 0, 0)
+            INSERT INTO TARIFA (descripcion, costo_hora, horas_limite_reduccion, costo_hora_reducida, tipo_cliente_aplicable)
+            VALUES ('Cliente Frecuente', 26.00, 5, 22.00, 'REGISTRADO')
+        """)
+        
+        cursor.execute("""
+            INSERT INTO TARIFA (descripcion, costo_hora, horas_limite_reduccion, costo_hora_reducida, tipo_cliente_aplicable)
+            VALUES ('Pensión Mensual', 0, 0, 0, 'AMBOS')
         """)
 
         conn.commit()

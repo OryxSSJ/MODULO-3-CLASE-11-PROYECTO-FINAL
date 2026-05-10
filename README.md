@@ -74,17 +74,22 @@ python app.py
 | PAGO       | Monto, método de pago (efectivo/tarjeta/transferencia) |
 | USUARIO    | Nombre, username, perfil (admin/cobrador)  |
 
-### Fórmula de Cobro de Estancia:
+### Fórmula de Cobro de Estancia (Dinámica):
 ```
-Si tiempo ≤ tiempo_inicial_min  →  costo_inicial
-Si tiempo > tiempo_inicial_min  →  costo_inicial + (minutos_extra × costo_por_min_extra)
+1. Se calcula el tiempo total en minutos.
+2. Se redondea al alza a la hora más cercana (ceil).
+3. Si Horas ≤ Horas Límite Reducción:
+   Total = Horas × Costo Hora
+4. Si Horas > Horas Límite Reducción:
+   Total = Horas × Costo Hora Reducida
 
-Clientes REGISTRADO: descuento adicional del 10%
-Clientes con +2 años de antigüedad en pensión: descuento del 20%
-
-Ejemplo: 90 min con Tarifa Estándar ($20 base, 60 min, $0.25/min extra)
-$20.00 + (30 × $0.25) = $27.50
+Ejemplo: 
+Tarifa: $30/hr, Límite 5 hrs, Reducida $25/hr.
+- Si se queda 4 hrs: 4 * 30 = $120.
+- Si se queda 6 hrs: 6 * 25 = $150.
 ```
+
+> **Interoperabilidad:** Las tarifas se configuran desde el módulo de "Tarifas" y afectan instantáneamente al cálculo de salida.
 
 ---
 
@@ -125,3 +130,13 @@ $20.00 + (30 × $0.25) = $27.50
 - 📊 **Reportes server-side** renderizados en Jinja2 (gráficas de barras, demanda por hora/mes, ingresos)
 - ⚙️ **Configuración por variables de entorno** (DB, secret key, tarifa base de pensión)
 - 🛡️ **Control de acceso por roles** (admin vs cobrador)
+- 🔒 **Blindaje de Negocio**: Prevención de doble entrada, validación de traslapes en pensiones y protección de tarifas exclusivas.
+
+---
+
+## 🛠️ Pendientes y Próximas Mejoras
+
+- [ ] **Pruebas de Estrés**: Carga masiva de ~500 registros para validar rendimiento de reportes.
+- [ ] **Módulo de Facturación**: Generación de PDF para tickets de salida.
+- [ ] **Notificaciones**: Avisos automáticos por correo cuando una pensión esté por expirar.
+- [ ] **Integración con Hardware**: Conexión con sensores de proximidad para automatizar la apertura de plumas.
