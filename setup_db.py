@@ -34,7 +34,7 @@ def setup_database():
                 username VARCHAR(50) UNIQUE,
                 password VARCHAR(255),
                 perfil ENUM('admin', 'cobrador')
-            );
+            ) ENGINE=InnoDB;
         """)
 
         # 2. CLIENTE
@@ -46,7 +46,7 @@ def setup_database():
                 tipo_cliente ENUM('REGISTRADO', 'OCASIONAL'),
                 fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
                 estado ENUM('ACTIVO', 'INACTIVO') DEFAULT 'ACTIVO'
-            );
+            ) ENGINE=InnoDB;
         """)
 
         # 3. VEHICULO
@@ -57,9 +57,10 @@ def setup_database():
                 marca VARCHAR(50),
                 modelo VARCHAR(50),
                 color VARCHAR(30),
+                estado ENUM('ACTIVO', 'INACTIVO') DEFAULT 'ACTIVO',
                 id_cliente INT,
-                FOREIGN KEY (id_cliente) REFERENCES CLIENTE(id_cliente) ON DELETE SET NULL
-            );
+                FOREIGN KEY (id_cliente) REFERENCES CLIENTE(id_cliente) ON DELETE CASCADE
+            ) ENGINE=InnoDB;
         """)
 
         # 4. TARIFA
@@ -73,7 +74,7 @@ def setup_database():
                 tipo_cliente_aplicable ENUM('REGISTRADO', 'OCASIONAL', 'AMBOS') DEFAULT 'AMBOS',
                 estado ENUM('ACTIVA', 'INACTIVA') DEFAULT 'ACTIVA',
                 fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
+            ) ENGINE=InnoDB;
         """)
 
         # 5. ESTANCIA
@@ -87,7 +88,7 @@ def setup_database():
                 es_pension BOOLEAN DEFAULT FALSE,
                 FOREIGN KEY (id_vehiculo) REFERENCES VEHICULO(id_vehiculo) ON DELETE CASCADE,
                 FOREIGN KEY (id_tarifa) REFERENCES TARIFA(id_tarifa) ON DELETE SET NULL
-            );
+            ) ENGINE=InnoDB;
         """)
 
         # 6. PENSION
@@ -103,7 +104,7 @@ def setup_database():
                 observaciones VARCHAR(255) NULL,
                 FOREIGN KEY (id_cliente) REFERENCES CLIENTE(id_cliente) ON DELETE CASCADE,
                 FOREIGN KEY (id_vehiculo) REFERENCES VEHICULO(id_vehiculo) ON DELETE CASCADE
-            );
+            ) ENGINE=InnoDB;
         """)
 
         # 7. PAGO
@@ -119,10 +120,23 @@ def setup_database():
                 observaciones VARCHAR(255) NULL,
                 FOREIGN KEY (id_estancia) REFERENCES ESTANCIA(id_estancia) ON DELETE SET NULL,
                 FOREIGN KEY (id_pension) REFERENCES PENSION(id_pension) ON DELETE SET NULL
-            );
+            ) ENGINE=InnoDB;
         """)
 
         cursor.execute("SET FOREIGN_KEY_CHECKS = 1;")
+
+        # Triggers
+        cursor.execute("DROP TRIGGER IF EXISTS trg_cliente_baja_vehiculos;")
+        cursor.execute("""
+            CREATE TRIGGER trg_cliente_baja_vehiculos
+            AFTER UPDATE ON CLIENTE
+            FOR EACH ROW
+            BEGIN
+                IF NEW.estado = 'INACTIVO' AND OLD.estado = 'ACTIVO' THEN
+                    UPDATE VEHICULO SET estado = 'INACTIVO' WHERE id_cliente = NEW.id_cliente;
+                END IF;
+            END;
+        """)
 
         # Insert Default Admin and basic Tariff
         hashed_pwd = generate_password_hash('admin')
@@ -148,6 +162,11 @@ def setup_database():
 
         conn.commit()
         print("Database structure successfully created with sample data.")
+
+        # Import and run seed data
+        import seed_data
+        print("Running seed_data script...")
+        seed_data.seed_database()
 
     except mysql.connector.Error as err:
         print(f"Error: {err}")

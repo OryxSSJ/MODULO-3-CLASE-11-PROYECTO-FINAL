@@ -28,7 +28,7 @@
     <div class="content-card-body" style="padding:0;">
       <div class="table-container">
         <table class="data-table" id="vehiculos-table">
-          <thead><tr><th>ID</th><th>Placa</th><th>Marca</th><th>Modelo</th><th>Color</th><th>Cliente</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>ID</th><th>Placa</th><th>Marca</th><th>Modelo</th><th>Color</th><th>Cliente</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
             {% for v in vehiculos %}
             <tr>
@@ -45,10 +45,11 @@
                 </div>
               </td>
               <td>{{ v.nombre_cliente if v.cliente_id else 'Sin asignar' }}</td>
+              <td><span class="status-badge status-{{ v.estado }}">{{ v.estado|upper }}</span></td>
               <td>
   <div class="d-flex gap-1">
     <button class="btn btn-ghost btn-sm" title="Editar"
-      onclick='abrirEditarVehiculo({{ v.matricula|default("", true)|tojson }}, {{ v.marca|default("", true)|tojson }}, {{ v.modelo|default("", true)|tojson }}, {{ v.color|default("", true)|tojson }}, {{ v.cliente_id|default("", true)|tojson }})'>✏️</button>
+      onclick='abrirEditarVehiculo({{ v.matricula|default("", true)|tojson }}, {{ v.marca|default("", true)|tojson }}, {{ v.modelo|default("", true)|tojson }}, {{ v.color|default("", true)|tojson }}, {{ v.cliente_id|default("", true)|tojson }}, {{ v.estado|default("activo", true)|tojson }})'>✏️</button>
 
     <button class="btn btn-danger btn-sm" title="Eliminar"
       onclick='eliminarVehiculo({{ v.matricula|default("", true)|tojson }})'>🗑️</button>
@@ -73,6 +74,7 @@
         <div class="vehicle-card-detail"><span class="detail-label">Modelo:</span><span>{{ v.modelo }}</span></div>
         <div class="vehicle-card-detail"><span class="detail-label">Color:</span><span>{{ v.color }}</span></div>
         <div class="vehicle-card-detail"><span class="detail-label">Cliente:</span><span>{{ v.nombre_cliente if v.cliente_id else 'Sin asignar' }}</span></div>
+        <div class="vehicle-card-detail"><span class="detail-label">Estado:</span><span class="status-badge status-{{ v.estado }}">{{ v.estado|upper }}</span></div>
       </div>
     </div>
     {% endfor %}
@@ -164,6 +166,15 @@
           <select name="cliente_id" id="edit-vehiculo-cliente" class="form-select">
             <option value="">Ninguno (Ocasional)</option>
             {% for c in clientes if c.estado == 'activo' %}<option value="{{ c.cliente_id }}">{{ c.nombre }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="grid-form-row">
+        <div class="form-group">
+          <label class="form-label">Estado</label>
+          <select id="edit-vehiculo-estado" class="form-select">
+            <option value="activo">Activo</option>
+            <option value="inactivo">Inactivo</option>
           </select>
         </div>
       </div>

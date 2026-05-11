@@ -487,12 +487,13 @@ function crearVehiculo(event) {
   }).catch(() => showToast('Error de conexión', 'error'));
 }
 
-function abrirEditarVehiculo(matricula, marca, modelo, color, cliente_id) {
+function abrirEditarVehiculo(matricula, marca, modelo, color, cliente_id, estado) {
   document.getElementById('edit-vehiculo-matricula').value = matricula;
   document.getElementById('edit-vehiculo-marca').value = marca;
   document.getElementById('edit-vehiculo-modelo').value = modelo;
   document.getElementById('edit-vehiculo-color').value = color;
   document.getElementById('edit-vehiculo-cliente').value = cliente_id || "";
+  document.getElementById('edit-vehiculo-estado').value = estado || "activo";
   openModal('modal-editar-vehiculo');
 }
 
@@ -503,6 +504,7 @@ function guardarEditarVehiculo() {
     modelo: document.getElementById('edit-vehiculo-modelo').value,
     color: document.getElementById('edit-vehiculo-color').value,
     cliente_id: document.getElementById('edit-vehiculo-cliente').value,
+    estado: document.getElementById('edit-vehiculo-estado').value,
   };
   apiRequest(`/api/vehiculos/${matricula}`, 'PUT', data).then(r => {
     if (r.success || r.message) { showToast(r.message || 'Vehículo actualizado'); closeModal('modal-editar-vehiculo'); reloadAfterDelay(); }

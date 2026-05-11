@@ -169,7 +169,7 @@ def vehiculos():
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT v.id_vehiculo as matricula_id, v.placa as matricula, v.marca, v.modelo, v.color, v.id_cliente as cliente_id, c.nombre as nombre_cliente 
+            SELECT v.id_vehiculo as matricula_id, v.placa as matricula, v.marca, v.modelo, v.color, LOWER(v.estado) as estado, v.id_cliente as cliente_id, c.nombre as nombre_cliente 
             FROM VEHICULO v 
             LEFT JOIN CLIENTE c ON v.id_cliente = c.id_cliente
         """)
@@ -451,14 +451,15 @@ def api_editar_vehiculo(placa):
         marca = datos.get('marca')
         modelo = datos.get('modelo')
         color = datos.get('color')
+        estado = datos.get('estado', 'ACTIVO')
         id_cliente = datos.get('cliente_id') or None
         if id_cliente == "":
             id_cliente = None
 
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("UPDATE VEHICULO SET marca=%s, modelo=%s, color=%s, id_cliente=%s WHERE placa=%s",
-                       (marca, modelo, color, id_cliente, placa))
+        cursor.execute("UPDATE VEHICULO SET marca=%s, modelo=%s, color=%s, estado=%s, id_cliente=%s WHERE placa=%s",
+                       (marca, modelo, color, estado.upper(), id_cliente, placa))
         conn.commit()
         return jsonify({'success': True, 'message': 'Vehículo actualizado correctamente'})
     except mysql.connector.Error as err:
