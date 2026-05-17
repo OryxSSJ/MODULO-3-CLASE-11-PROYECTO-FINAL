@@ -25,6 +25,10 @@ check_*.py
 schema_*.py
 test_*.py
 test_*.html
+pdf_content.txt
+Proyecto_Final_App_Tema_Libre.pdf
+read_pdf.py
+reset_admin.py
 
 # OS
 .DS_Store

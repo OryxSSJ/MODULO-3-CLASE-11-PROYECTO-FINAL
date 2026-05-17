@@ -49,7 +49,7 @@ El diagrama de pantallas detallando el flujo de navegación entre módulos (Logi
 
 ```bash
 git clone https://github.com/OryxSSJ/Estacionamiento_PFinal
-cd MODULO-3-CLASE-11-PROYECTO-FINAL
+cd Estacionamiento_PFinal
 ```
 
 ### 3. Instalar dependencias
