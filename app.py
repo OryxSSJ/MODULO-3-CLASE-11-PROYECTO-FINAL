@@ -141,10 +141,16 @@ def dashboard():
         WHERE e.fecha_salida IS NULL
         """)
         estancias_activas = cursor.fetchall()
+        
+        cursor.execute("SELECT * FROM TARIFA WHERE estado = 'ACTIVA'")
+        tarifas_vigentes = cursor.fetchall()
+        
         ingresos_hoy = float(g.global_stats['ingresos_hoy']) if g.get('global_stats') else 0
         return render_template('dashboard.html',
             stats={'ingresos_hoy': ingresos_hoy},
-            estancias_activas=estancias_activas)
+            estancias_activas=estancias_activas,
+            tarifas_vigentes=tarifas_vigentes,
+            pension_base=PENSION_MENSUAL_BASE)
     except mysql.connector.Error as err:
         flash(f'Error de DB: {err}', 'error')
         return render_template('dashboard.html', estancias_activas=[])

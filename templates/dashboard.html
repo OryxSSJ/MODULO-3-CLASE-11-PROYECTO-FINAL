@@ -106,19 +106,26 @@
       <h2 class="content-card-title"><span class="card-icon">💲</span> Tarifas Vigentes</h2>
     </div>
     <div class="content-card-body">
-      <div class="price-info" style="grid-template-columns:1fr;">
+      <div class="price-info" style="grid-template-columns:1fr; gap: 0.5rem;">
+        {% for tarifa in tarifas_vigentes %}
         <div class="price-card">
-          <div class="price-card-title">Normal</div>
-          <div class="price-card-amount">$20.00</div>
-          <div class="price-card-unit">Por hora o fracción</div>
-          <div class="price-card-note">Tarifa estándar para visitantes</div>
+          <div class="price-card-title">{{ tarifa.descripcion }}</div>
+          {% if 'pension' in tarifa.descripcion.lower() or 'pensión' in tarifa.descripcion.lower() %}
+            <div class="price-card-amount">${{ "%.2f"|format(pension_base) }}</div>
+            <div class="price-card-unit">Mensual</div>
+            <div class="price-card-note">Acceso 24/7 para clientes registrados</div>
+          {% else %}
+            <div class="price-card-amount">${{ "%.2f"|format(tarifa.costo_hora) }}</div>
+            <div class="price-card-unit">Por hora o fracción</div>
+            <div class="price-card-note">
+              Aplica a: {{ tarifa.tipo_cliente_aplicable | capitalize }}. 
+              {% if tarifa.horas_limite_reduccion > 0 %}
+                (Después de {{ tarifa.horas_limite_reduccion }} hrs baja a ${{ "%.2f"|format(tarifa.costo_hora_reducida) }})
+              {% endif %}
+            </div>
+          {% endif %}
         </div>
-        <div class="price-card mt-2">
-          <div class="price-card-title">Pensión</div>
-          <div class="price-card-amount">$1,500.00</div>
-          <div class="price-card-unit">Mensual</div>
-          <div class="price-card-note">Acceso 24/7 para clientes registrados</div>
-        </div>
+        {% endfor %}
       </div>
       <div class="price-card mt-2" style="text-align:left; background:rgba(0,212,170,0.05); border-color:rgba(0,212,170,0.2);">
         <div class="price-card-title">📐 Ejemplo de cálculo</div>
